@@ -49,3 +49,13 @@ export function calculateMedian(values) {
 
   return (sortedValues[middle - 1] + sortedValues[middle]) / 2
 }
+
+export function isBeatActive(playbackTime, { bpm, beatOffset }, duration) {
+  if (playbackTime === null) return false
+
+  const relativeTime = playbackTime - beatOffset
+  if (relativeTime < 0) return false
+
+  const beatDuration = 60 / bpm
+  return relativeTime % beatDuration < duration
+}
