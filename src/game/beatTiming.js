@@ -1,6 +1,6 @@
 export const PRACTICE_TIMING = Object.freeze({
   bpm: 125,
-  beatOffset: 0.37,
+  beatOffset: -.02,
   calibrationOffset: 0,
   perfectWindow: 0.06,
   goodWindow: 0.14,

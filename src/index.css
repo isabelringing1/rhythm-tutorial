@@ -1,5 +1,11 @@
+@font-face {
+  font-family: "Handwriting";
+  src: url("/handwriting.ttf") format("truetype");
+  font-display: swap;
+}
+
 :root {
-  font-family: sans-serif;
+  font-family: Arial, sans-serif;
   color: black;
   background: white;
 }
@@ -48,6 +54,75 @@ button {
   color: black;
   background: white;
   border: 1px solid black;
+  cursor: pointer;
+}
+
+.dialogue-box {
+  position: fixed;
+  bottom: 8vh;
+  left: 50%;
+  z-index: 2;
+  display: grid;
+  gap: 14px;
+  width: 70vw;
+  height: 200px;
+  padding: 30px 35px 14px;
+  transform: translateX(-50%);
+  color: black;
+  background: white;
+  border: 2px solid black;
+  border-radius: 25px;
+  font-family: "Handwriting", sans-serif;
+  font-size: clamp(20px, 3vw, 30px);
+  text-align: left;
+  cursor: pointer;
+  font-size: 50px;
+}
+
+.dialogue-prompt {
+  align-self: end;
+  justify-self: end;
+  width: 40px;
+  height: 40px;
+  fill: #b8b8b8;
+  stroke: #b8b8b8;
+  stroke-linejoin: round;
+  stroke-width: 1.5px;
+}
+
+.round-counter {
+  position: fixed;
+  top: 20%;
+  left: 50%;
+  z-index: 2;
+  margin: 0;
+  transform: translateX(-50%);
+  font-size: 50px;
+  text-align: center;
+  font-family: "Handwriting", sans-serif;
+}
+
+.round-counter.perfect {
+  color: #16833b;
+}
+
+.round-counter.miss {
+  color: #b91c1c;
+}
+
+.completion-panel {
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  font-size: 28px;
+}
+
+.completion-panel button {
+  padding: 8px 16px;
+  color: black;
+  background: white;
+  border: 1px solid black;
+  font: inherit;
   cursor: pointer;
 }
 
@@ -104,4 +179,88 @@ button {
 .timing-debug button:disabled {
   cursor: default;
   opacity: 0.5;
+}
+
+.rhythm-preview {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 3;
+  width: min(420px, calc(100vw - 238px));
+  padding: 8px 10px;
+  background: rgb(255 255 255 / 94%);
+  border: 1px solid black;
+  font-size: 12px;
+}
+
+.rhythm-preview summary {
+  cursor: pointer;
+}
+
+.rhythm-bars {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.rhythm-bar {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  height: 38px;
+  border-right: 2px solid black;
+  border-left: 2px solid black;
+}
+
+.rhythm-bar::before,
+.rhythm-bar::after {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: #777;
+  content: "";
+}
+
+.rhythm-bar::before {
+  top: 13px;
+}
+
+.rhythm-bar::after {
+  top: 25px;
+}
+
+.rhythm-step {
+  position: relative;
+  border-left: 1px solid rgb(0 0 0 / 12%);
+}
+
+.rhythm-step.hit::after {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  width: 11px;
+  height: 8px;
+  transform: translate(-50%, -50%) rotate(-12deg);
+  background: black;
+  border-radius: 50%;
+  content: "";
+}
+
+@media (max-width: 700px) {
+  .timing-debug {
+    display: none;
+  }
+
+  .rhythm-preview {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+  }
+
+  .dialogue-box {
+    bottom: 5vh;
+  }
 }

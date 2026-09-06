@@ -1,51 +1,102 @@
 export class AudioEngine {
   context = null
-  activeSource = null
+  trackSource = null
   playbackStartedAt = null
   buffers = new Map()
+  oneShotSources = new Set()
 
-  async play(url, { onEnded } = {}) {
+  async preload(urls) {
     const context = this.#getContext()
-
     if (context.state === 'suspended') {
       await context.resume()
     }
+    await Promise.all([...new Set(urls)].map((url) => this.#loadBuffer(url)))
+  }
 
+  async play(url, options = {}) {
+    return this.startTrack(url, options)
+  }
+
+  async startTrack(url, { loop = false, onEnded } = {}) {
+    const context = this.#getContext()
+    if (context.state === 'suspended') {
+      await context.resume()
+    }
     const buffer = await this.#loadBuffer(url)
     this.stop()
 
     const source = context.createBufferSource()
     source.buffer = buffer
+    source.loop = loop
     source.connect(context.destination)
     source.addEventListener('ended', () => {
-      if (this.activeSource === source) {
-        this.activeSource = null
+      if (this.trackSource === source) {
+        this.trackSource = null
         this.playbackStartedAt = null
         onEnded?.()
       }
     })
     this.playbackStartedAt = context.currentTime
     source.start(this.playbackStartedAt)
-    this.activeSource = source
+    this.trackSource = source
+  }
+
+  async scheduleSound(url, playbackTime) {
+    if (this.playbackStartedAt === null) return null
+    const context = this.#getContext()
+    const buffer = await this.#loadBuffer(url)
+    const source = context.createBufferSource()
+    source.buffer = buffer
+    source.connect(context.destination)
+    this.oneShotSources.add(source)
+    source.addEventListener('ended', () => {
+      this.oneShotSources.delete(source)
+      source.disconnect()
+    })
+    source.start(Math.max(context.currentTime, this.playbackStartedAt + playbackTime))
+    return source
+  }
+
+  async playSound(url) {
+    const context = this.#getContext()
+    if (context.state === 'suspended') {
+      await context.resume()
+    }
+    const buffer = await this.#loadBuffer(url)
+    const source = context.createBufferSource()
+    source.buffer = buffer
+    source.connect(context.destination)
+    this.oneShotSources.add(source)
+    source.addEventListener('ended', () => {
+      this.oneShotSources.delete(source)
+      source.disconnect()
+    })
+    source.start()
+    return source
   }
 
   stop() {
-    if (!this.activeSource) return
-
-    this.activeSource.stop()
-    this.activeSource.disconnect()
-    this.activeSource = null
+    if (this.trackSource) {
+      this.trackSource.stop()
+      this.trackSource.disconnect()
+      this.trackSource = null
+    }
+    this.oneShotSources.forEach((source) => {
+      source.stop()
+      source.disconnect()
+    })
+    this.oneShotSources.clear()
     this.playbackStartedAt = null
   }
 
   async pause() {
-    if (this.context?.state === 'running' && this.activeSource) {
+    if (this.context?.state === 'running' && this.trackSource) {
       await this.context.suspend()
     }
   }
 
   async resume() {
-    if (this.context?.state === 'suspended' && this.activeSource) {
+    if (this.context?.state === 'suspended' && this.trackSource) {
       await this.context.resume()
     }
   }

@@ -1,66 +1,135 @@
-import { Graphics } from 'pixi.js'
-import { isBeatActive } from './beatTiming.js'
+import { Assets, Container, Sprite, Text } from 'pixi.js'
 
-const FEEDBACK_COLORS = {
-  perfect: 0x22c55e,
-  good: 0xfacc15,
-  miss: 0xef4444,
+const CHARACTER_COUNT = 4
+const PLAYER_INDEX = 3
+const MAD_DURATION = 0.75
+const HAPPY_DURATION = 1
+const SMOOTH_TEXTURE_OPTIONS = {
+  autoGenerateMipmaps: true,
+  scaleMode: 'linear',
 }
-const VISUAL_DURATION = 0.08
 
-export function createGameVisuals(
+function loadCharacterTexture(src) {
+  return Assets.load({
+    src,
+    data: SMOOTH_TEXTURE_OPTIONS,
+  })
+}
+
+export async function createGameVisuals(
   app,
-  { audioEngine, getFeedback, getIsPlaying, getTiming },
+  {
+    audioEngine,
+    getFeedback,
+    getIsPlaying,
+    getPerformance,
+    getShowCharacters,
+  },
 ) {
-  const feedbackCircle = new Graphics()
-  const beatMarker = new Graphics().rect(-8, -8, 16, 16).fill(0x000000)
-  let feedbackTimeRemaining = 0
+  const [defaultTexture, bellTexture, madTexture, happyTexture] =
+    await Promise.all([
+      loadCharacterTexture('/sprites/guy/default.png'),
+      loadCharacterTexture('/sprites/guy/bell.png'),
+      loadCharacterTexture('/sprites/guy/mad.png'),
+      loadCharacterTexture('/sprites/guy/happy.png'),
+    ])
+  const characterLayer = new Container()
+  const characters = Array.from({ length: CHARACTER_COUNT }, (_, index) => {
+    const container = new Container()
+    const sprite = new Sprite(defaultTexture)
+    sprite.anchor.set(0.5)
+    container.addChild(sprite)
+    if (index === PLAYER_INDEX) {
+      const label = new Text({
+        text: 'You',
+        style: {
+          fill: 0x000000,
+          fontFamily: 'Arial, sans-serif',
+          fontSize: 22,
+        },
+      })
+      label.anchor.set(0.5, 1)
+      container.addChild(label)
+      return { container, label, sprite }
+    }
+    return { container, label: null, sprite }
+  })
+  let playerPoseTimeRemaining = 0
+  let cpuMadTimeRemaining = 0
+  let happyTimeRemaining = 0
 
-  feedbackCircle.visible = false
-  beatMarker.visible = false
-  app.stage.addChild(feedbackCircle, beatMarker)
+  characters.forEach(({ container }) => characterLayer.addChild(container))
+  app.stage.addChild(characterLayer)
 
   function positionVisuals() {
-    feedbackCircle.position.set(app.screen.width / 2, app.screen.height / 2)
-    beatMarker.position.set(app.screen.width / 2 + 70, app.screen.height / 2)
+    const spriteSize = Math.min(
+      app.screen.width * 0.16,
+      app.screen.height * 0.24,
+      220,
+    )
+    const spacing = spriteSize * 0.65
+    const rightMargin = app.screen.height * 0.2
+    const rightmostX = app.screen.width - rightMargin - spriteSize / 2
+    const startX = rightmostX - spacing * (CHARACTER_COUNT - 1)
+    const centerY = app.screen.height * 0.58
+
+    characters.forEach(({ container, label, sprite }, index) => {
+      container.position.set(startX + spacing * index, centerY)
+      sprite.width = spriteSize
+      sprite.height = spriteSize
+      if (label) label.position.set(0, -spriteSize * 0.52)
+    })
   }
 
   function showFeedback(feedback) {
-    if (!feedback) {
-      feedbackCircle.visible = false
-      return
+    if (!feedback) return
+    if (feedback.noteIndex !== undefined) {
+      playerPoseTimeRemaining = getPerformance()?.poseDuration ?? 0.12
     }
-
-    feedbackCircle
-      .clear()
-      .circle(0, 0, 50)
-      .fill(FEEDBACK_COLORS[feedback.rating])
-    feedbackCircle.visible = true
-    feedbackTimeRemaining = VISUAL_DURATION
+    if (feedback.rating !== 'perfect') {
+      cpuMadTimeRemaining = MAD_DURATION
+    } else if (feedback.noteIndex === undefined) {
+      happyTimeRemaining = HAPPY_DURATION
+    }
   }
 
   function update(ticker) {
-    if (feedbackCircle.visible) {
-      feedbackTimeRemaining -= ticker.deltaMS / 1000
-      if (feedbackTimeRemaining <= 0) {
-        feedbackCircle.visible = false
+    characterLayer.visible = getShowCharacters()
+    if (!characterLayer.visible) return
+
+    if (playerPoseTimeRemaining > 0) {
+      playerPoseTimeRemaining -= ticker.deltaMS / 1000
+    }
+    if (cpuMadTimeRemaining > 0) {
+      cpuMadTimeRemaining -= ticker.deltaMS / 1000
+    }
+    if (happyTimeRemaining > 0) {
+      happyTimeRemaining -= ticker.deltaMS / 1000
+    }
+
+    const active = Array(CHARACTER_COUNT).fill(false)
+    const performance = getPerformance()
+    if (getIsPlaying() && performance) {
+      const playbackTime = audioEngine.getPlaybackTime()
+      performance.cpuTurns.forEach((turn) => {
+        active[turn.character] = performance.notes.some(
+          (note) =>
+            playbackTime >= turn.startTime + note.time &&
+            playbackTime <
+              turn.startTime + note.time + performance.poseDuration,
+        )
+      })
+    }
+    active[PLAYER_INDEX] = playerPoseTimeRemaining > 0
+    characters.forEach(({ sprite }, index) => {
+      if (happyTimeRemaining > 0) {
+        sprite.texture = happyTexture
+      } else if (index < PLAYER_INDEX && cpuMadTimeRemaining > 0) {
+        sprite.texture = madTexture
+      } else {
+        sprite.texture = active[index] ? bellTexture : defaultTexture
       }
-    }
-
-    if (!getIsPlaying()) {
-      beatMarker.visible = false
-      return
-    }
-
-    const timing = getTiming()
-    const playbackTime = audioEngine.getPlaybackTime({
-      calibrationOffset: timing.calibrationOffset,
     })
-    beatMarker.visible = isBeatActive(
-      playbackTime,
-      timing,
-      VISUAL_DURATION,
-    )
   }
 
   positionVisuals()
@@ -73,6 +142,7 @@ export function createGameVisuals(
     destroy() {
       app.renderer.off('resize', positionVisuals)
       app.ticker.remove(update)
+      characterLayer.destroy({ children: true })
     },
   }
 }

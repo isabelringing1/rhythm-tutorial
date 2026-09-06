@@ -8,6 +8,8 @@ export function GameCanvas({
   feedback,
   isCalibrating,
   isPlaying,
+  performance,
+  showCharacters,
   timing,
 }) {
   const containerRef = useRef(null)
@@ -15,6 +17,8 @@ export function GameCanvas({
   const feedbackRef = useRef(feedback)
   const isCalibratingRef = useRef(isCalibrating)
   const isPlayingRef = useRef(isPlaying)
+  const performanceRef = useRef(performance)
+  const showCharactersRef = useRef(showCharacters)
   const timingRef = useRef(timing)
 
   useEffect(() => {
@@ -38,18 +42,24 @@ export function GameCanvas({
 
       container.appendChild(app.canvas)
 
-      sceneRef.current = {
-        calibration: createCalibrationVisuals(app, {
-          audioEngine,
-          getIsCalibrating: () => isCalibratingRef.current,
-        }),
-        game: createGameVisuals(app, {
+      const calibration = createCalibrationVisuals(app, {
+        audioEngine,
+        getIsCalibrating: () => isCalibratingRef.current,
+      })
+      const game = await createGameVisuals(app, {
           audioEngine,
           getFeedback: () => feedbackRef.current,
           getIsPlaying: () => isPlayingRef.current,
-          getTiming: () => timingRef.current,
-        }),
+          getPerformance: () => performanceRef.current,
+          getShowCharacters: () => showCharactersRef.current,
+        })
+      if (disposed) {
+        calibration.destroy()
+        game.destroy()
+        app.destroy(true, { children: true })
+        return
       }
+      sceneRef.current = { calibration, game }
     }
 
     mountCanvas()
@@ -77,6 +87,14 @@ export function GameCanvas({
   useEffect(() => {
     isPlayingRef.current = isPlaying
   }, [isPlaying])
+
+  useEffect(() => {
+    performanceRef.current = performance
+  }, [performance])
+
+  useEffect(() => {
+    showCharactersRef.current = showCharacters
+  }, [showCharacters])
 
   useEffect(() => {
     timingRef.current = timing
