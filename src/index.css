@@ -44,17 +44,31 @@ button {
 }
 
 .start-menu {
-  z-index: 1;
-  display: grid;
-  gap: 8px;
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
 }
 
 .start-menu button {
+  position: absolute;
   padding: 8px 16px;
   color: black;
   background: white;
   border: 1px solid black;
   cursor: pointer;
+  pointer-events: auto;
+}
+
+.start-button {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.calibrate-button {
+  top: 16px;
+  left: 16px;
 }
 
 .dialogue-box {
@@ -88,6 +102,9 @@ button {
   stroke: #b8b8b8;
   stroke-linejoin: round;
   stroke-width: 1.5px;
+  position: absolute;
+  bottom: 15px;
+  right: 15px;
 }
 
 .round-counter {

@@ -63,16 +63,12 @@ export async function createGameVisuals(
   app.stage.addChild(characterLayer)
 
   function positionVisuals() {
-    const spriteSize = Math.min(
-      app.screen.width * 0.16,
-      app.screen.height * 0.24,
-      220,
-    )
+    const spriteSize = 220;
     const spacing = spriteSize * 0.65
     const rightMargin = app.screen.height * 0.2
     const rightmostX = app.screen.width - rightMargin - spriteSize / 2
     const startX = rightmostX - spacing * (TOTAL_SLOT_COUNT - 1)
-    const centerY = app.screen.height * 0.58
+    const centerY = app.screen.height - app.screen.height * 0.4
 
     characters.forEach(({ container, label, slot, sprite }) => {
       container.position.set(startX + spacing * slot, centerY)

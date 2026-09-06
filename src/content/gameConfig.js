@@ -23,7 +23,7 @@ const rawGameConfig = {
       bpm: 125,
       beatsPerBar: 4,
       stepsPerBeat: 4,
-      pattern: 'x..x .... .... ....',
+      pattern: 'x... .... .... ....',
       backingTrack: '/audio/bottle.mp3',
       hitSound: '/audio/bell.wav',
       requiredSuccesses: 3,
@@ -31,7 +31,31 @@ const rawGameConfig = {
     },
     {
       type: 'dialogue',
-      lines: ['That was great!', 'You have got the rhythm now.'],
+      lines: [
+        'Nice. Sometimes, the pattern might change.',
+        'Let\'s try again with a harder rhythm.',
+      ],
+      lastLineStick: true,
+    },
+    {
+      type: 'play',
+      bpm: 125,
+      beatsPerBar: 4,
+      stepsPerBeat: 4,
+      pattern: 'x..x .... x... ....',
+      backingTrack: '/audio/bottle.mp3',
+      hitSound: '/audio/bell.wav',
+      requiredSuccesses: 3,
+      poseDuration: 0.12,
+    },
+
+    {
+      type: 'dialogue',
+      lines: [
+        'Great! Try to remember that when the real thing starts.',
+        '...Oh, you thought we were starting now? Sorry, there\'s more.',
+      ],
+      lastLineStick: true,
     },
   ],
 }

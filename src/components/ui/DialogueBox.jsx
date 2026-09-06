@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const PROMPT_DELAY_MS = 600
 
@@ -7,6 +7,7 @@ export function DialogueBox({ text, onAdvance, isPersistent = false }) {
     text,
     isVisible: false,
   })
+  const buttonRef = useRef(null)
   const timeoutRef = useRef(null)
   const showPrompt =
     !isPersistent && promptState.text === text && promptState.isVisible
@@ -25,16 +26,35 @@ export function DialogueBox({ text, onAdvance, isPersistent = false }) {
     }
   }, [isPersistent, text])
 
-  function handleClick() {
-    if (!showPrompt) {
-      window.clearTimeout(timeoutRef.current)
-      timeoutRef.current = null
-      setPromptState({ text, isVisible: true })
-      return
+  const handleClick = useCallback(() => {
+    onAdvance()
+  }, [onAdvance])
+
+  useEffect(() => {
+    if (isPersistent) return undefined
+
+    function handleKeyDown(event) {
+      if (
+        event.repeat ||
+        (event.key !== 'Enter' && event.code !== 'KeyJ')
+      ) {
+        return
+      }
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.matches('button, input, select, textarea') &&
+        event.target !== buttonRef.current
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      handleClick()
     }
 
-    onAdvance()
-  }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleClick, isPersistent])
 
   if (isPersistent) {
     return (
@@ -46,10 +66,11 @@ export function DialogueBox({ text, onAdvance, isPersistent = false }) {
 
   return (
     <button
+      ref={buttonRef}
       type="button"
       className="dialogue-box"
       onClick={handleClick}
-      aria-label={`${text} ${showPrompt ? 'Click to continue' : 'Click to show continue arrow'}`}
+      aria-label={`${text} Click to continue`}
     >
       <span>{text}</span>
       {showPrompt && (

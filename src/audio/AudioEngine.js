@@ -23,7 +23,7 @@ export class AudioEngine {
       await context.resume()
     }
     const buffer = await this.#loadBuffer(url)
-    this.stop()
+    this.stopTrack()
 
     const source = context.createBufferSource()
     source.buffer = buffer
@@ -76,16 +76,20 @@ export class AudioEngine {
   }
 
   stop() {
-    if (this.trackSource) {
-      this.trackSource.stop()
-      this.trackSource.disconnect()
-      this.trackSource = null
-    }
+    this.stopTrack()
     this.oneShotSources.forEach((source) => {
       source.stop()
       source.disconnect()
     })
     this.oneShotSources.clear()
+  }
+
+  stopTrack() {
+    if (this.trackSource) {
+      this.trackSource.stop()
+      this.trackSource.disconnect()
+      this.trackSource = null
+    }
     this.playbackStartedAt = null
   }
 

@@ -31,6 +31,7 @@ import {
 import { getNextMeasureStart } from './game/rhythmPattern.js'
 
 const PRACTICE_TRACK = '/audio/bottle.mp3'
+const DIALOGUE_CLICK_SOUND = '/audio/click3.wav'
 const PLAYER_DELAY_STORAGE_KEY = 'rhythm-player-delay-ms'
 const CALIBRATION_SAMPLE_COUNT = 20
 const CPU_COUNT = 2
@@ -284,7 +285,7 @@ function App() {
       const step = GAME_CONFIG.steps[gameState.stepIndex]
       try {
         if (activeTrackStepRef.current !== gameState.stepIndex) {
-          audioEngine.stop()
+          audioEngine.stopTrack()
           await audioEngine.preload([step.backingTrack, step.hitSound])
           await audioEngine.startTrack(step.backingTrack, { loop: true })
           activeTrackStepRef.current = gameState.stepIndex
@@ -384,7 +385,7 @@ function App() {
 
   useEffect(() => {
     if (gameState.mode === 'dialogue' || gameState.mode === 'complete') {
-      audioEngine.stop()
+      audioEngine.stopTrack()
       activeTrackStepRef.current = null
       transitionRef.current = null
       nextAttemptStartRef.current = null
@@ -393,10 +394,17 @@ function App() {
 
   function handleStart() {
     setIsPaused(false)
+    void audioEngine.preload([DIALOGUE_CLICK_SOUND]).catch(console.error)
     dispatch({ type: 'START' })
   }
 
+  function handleAdvanceDialogue() {
+    void audioEngine.playSound(DIALOGUE_CLICK_SOUND).catch(console.error)
+    dispatch({ type: 'NEXT_DIALOGUE' })
+  }
+
   async function handleCalibrate() {
+    handleReset()
     setCalibrationStatus('loading')
     setCalibrationCount(0)
     calibrationPointsRef.current = []
@@ -471,16 +479,17 @@ function App() {
           {CALIBRATION_SAMPLE_COUNT})
         </p>
       )}
-      {gameState.mode === 'menu' && calibrationStatus === 'idle' && (
+      {calibrationStatus === 'idle' && (
         <StartMenu
           onCalibrate={handleCalibrate}
           onStart={handleStart}
+          showStart={gameState.mode === 'menu'}
         />
       )}
       {gameState.mode === 'dialogue' && (
         <DialogueBox
           text={activeStep.lines[gameState.dialogueLine]}
-          onAdvance={() => dispatch({ type: 'NEXT_DIALOGUE' })}
+          onAdvance={handleAdvanceDialogue}
         />
       )}
       {stickyDialogueText && (

@@ -1,12 +1,18 @@
-export function StartMenu({ onCalibrate, onStart }) {
+export function StartMenu({ onCalibrate, onStart, showStart }) {
   return (
     <div className="start-menu">
-      <button type="button" onClick={onCalibrate}>
+      <button
+        type="button"
+        className="calibrate-button"
+        onClick={onCalibrate}
+      >
         Calibrate
       </button>
-      <button type="button" onClick={onStart}>
-        Start
-      </button>
+      {showStart && (
+        <button type="button" className="start-button" onClick={onStart}>
+          Start
+        </button>
+      )}
     </div>
   )
 }
