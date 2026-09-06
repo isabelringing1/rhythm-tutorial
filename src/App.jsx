@@ -33,7 +33,9 @@ import { getNextMeasureStart } from './game/rhythmPattern.js'
 const PRACTICE_TRACK = '/audio/bottle.mp3'
 const PLAYER_DELAY_STORAGE_KEY = 'rhythm-player-delay-ms'
 const CALIBRATION_SAMPLE_COUNT = 20
-const CPU_COUNT = 3
+const CPU_COUNT = 2
+const FIRST_CPU_MEASURE = 1
+const PLAYER_MEASURE = 3
 const TURN_LEAD_IN = 0.35
 const gameFlowReducer = createGameFlowReducer(GAME_CONFIG)
 
@@ -120,6 +122,7 @@ function App() {
       }
 
       if (isPaused) return
+      if (event.code !== 'KeyJ') return
       event.preventDefault()
       const step = GAME_CONFIG.steps[gameState.stepIndex]
       void audioEngine.playSound(step.hitSound)
@@ -299,12 +302,16 @@ function App() {
           })
         nextAttemptStartRef.current = null
         const cpuTurns = Array.from({ length: CPU_COUNT }, (_, character) => ({
-          character,
-          startTime: firstTurnStart + character * turnDuration,
+          character: character + FIRST_CPU_MEASURE,
+          startTime:
+            firstTurnStart +
+            (character + FIRST_CPU_MEASURE) * turnDuration,
           endTime:
-            firstTurnStart + character * turnDuration + step.chart.duration,
+            firstTurnStart +
+            (character + FIRST_CPU_MEASURE) * turnDuration +
+            step.chart.duration,
         }))
-        const playerStart = firstTurnStart + CPU_COUNT * turnDuration
+        const playerStart = firstTurnStart + PLAYER_MEASURE * turnDuration
         const playerEnd = playerStart + step.chart.duration
         const performanceData = {
           cpuTurns,
@@ -430,6 +437,13 @@ function App() {
   }
 
   const activeStep = GAME_CONFIG.steps[gameState.stepIndex]
+  const previousStep = GAME_CONFIG.steps[gameState.stepIndex - 1]
+  const stickyDialogueText =
+    activeStep?.type === 'play' &&
+    previousStep?.type === 'dialogue' &&
+    previousStep.lastLineStick
+      ? previousStep.lines.at(-1)
+      : null
   const isPlaying =
     gameState.mode === 'cpuTurn' ||
     gameState.mode === 'playerTurn' ||
@@ -468,6 +482,9 @@ function App() {
           text={activeStep.lines[gameState.dialogueLine]}
           onAdvance={() => dispatch({ type: 'NEXT_DIALOGUE' })}
         />
+      )}
+      {stickyDialogueText && (
+        <DialogueBox text={stickyDialogueText} isPersistent />
       )}
       {activeStep?.type === 'play' && isPlaying && (
         <RoundCounter

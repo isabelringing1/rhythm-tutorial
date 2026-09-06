@@ -1,7 +1,8 @@
 import { Assets, Container, Sprite, Text } from 'pixi.js'
 
-const CHARACTER_COUNT = 4
-const PLAYER_INDEX = 3
+const CHARACTER_SLOTS = [1, 2, 3]
+const TOTAL_SLOT_COUNT = 4
+const PLAYER_SLOT = 3
 const MAD_DURATION = 0.75
 const HAPPY_DURATION = 1
 const SMOOTH_TEXTURE_OPTIONS = {
@@ -34,12 +35,12 @@ export async function createGameVisuals(
       loadCharacterTexture('/sprites/guy/happy.png'),
     ])
   const characterLayer = new Container()
-  const characters = Array.from({ length: CHARACTER_COUNT }, (_, index) => {
+  const characters = CHARACTER_SLOTS.map((slot) => {
     const container = new Container()
     const sprite = new Sprite(defaultTexture)
     sprite.anchor.set(0.5)
     container.addChild(sprite)
-    if (index === PLAYER_INDEX) {
+    if (slot === PLAYER_SLOT) {
       const label = new Text({
         text: 'You',
         style: {
@@ -50,9 +51,9 @@ export async function createGameVisuals(
       })
       label.anchor.set(0.5, 1)
       container.addChild(label)
-      return { container, label, sprite }
+      return { container, label, slot, sprite }
     }
-    return { container, label: null, sprite }
+    return { container, label: null, slot, sprite }
   })
   let playerPoseTimeRemaining = 0
   let cpuMadTimeRemaining = 0
@@ -70,11 +71,11 @@ export async function createGameVisuals(
     const spacing = spriteSize * 0.65
     const rightMargin = app.screen.height * 0.2
     const rightmostX = app.screen.width - rightMargin - spriteSize / 2
-    const startX = rightmostX - spacing * (CHARACTER_COUNT - 1)
+    const startX = rightmostX - spacing * (TOTAL_SLOT_COUNT - 1)
     const centerY = app.screen.height * 0.58
 
-    characters.forEach(({ container, label, sprite }, index) => {
-      container.position.set(startX + spacing * index, centerY)
+    characters.forEach(({ container, label, slot, sprite }) => {
+      container.position.set(startX + spacing * slot, centerY)
       sprite.width = spriteSize
       sprite.height = spriteSize
       if (label) label.position.set(0, -spriteSize * 0.52)
@@ -107,7 +108,7 @@ export async function createGameVisuals(
       happyTimeRemaining -= ticker.deltaMS / 1000
     }
 
-    const active = Array(CHARACTER_COUNT).fill(false)
+    const active = Array(TOTAL_SLOT_COUNT).fill(false)
     const performance = getPerformance()
     if (getIsPlaying() && performance) {
       const playbackTime = audioEngine.getPlaybackTime()
@@ -120,14 +121,14 @@ export async function createGameVisuals(
         )
       })
     }
-    active[PLAYER_INDEX] = playerPoseTimeRemaining > 0
-    characters.forEach(({ sprite }, index) => {
+    active[PLAYER_SLOT] = playerPoseTimeRemaining > 0
+    characters.forEach(({ slot, sprite }) => {
       if (happyTimeRemaining > 0) {
         sprite.texture = happyTexture
-      } else if (index < PLAYER_INDEX && cpuMadTimeRemaining > 0) {
+      } else if (slot < PLAYER_SLOT && cpuMadTimeRemaining > 0) {
         sprite.texture = madTexture
       } else {
-        sprite.texture = active[index] ? bellTexture : defaultTexture
+        sprite.texture = active[slot] ? bellTexture : defaultTexture
       }
     })
   }

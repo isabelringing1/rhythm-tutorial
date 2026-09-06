@@ -14,15 +14,16 @@ const rawGameConfig = {
       lines: [
         'Hey there. You’re about to play an amazing rhythm game. Everyone’s been raving about it!',
         'You should practice first. Don\'t worry, it won\'t take long.',
-        'Press J to ring the bell when it’s your turn in line. Try to hit it 3 times!',
+        'Press J to ring the bell when it’s your turn in line.',
       ],
+      lastLineStick: true,
     },
     {
       type: 'play',
       bpm: 125,
       beatsPerBar: 4,
       stepsPerBeat: 4,
-      pattern: 'x... .... .... ....',
+      pattern: 'x..x .... .... ....',
       backingTrack: '/audio/bottle.mp3',
       hitSound: '/audio/bell.wav',
       requiredSuccesses: 3,
