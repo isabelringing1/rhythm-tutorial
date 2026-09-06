@@ -1,4 +1,9 @@
-import { Assets, Container, Sprite, Text } from 'pixi.js'
+import { Assets, Container, Text } from 'pixi.js'
+import { GUY_VISUAL_CONFIG } from '../content/characterVisualConfig.js'
+import {
+  createLayeredCharacter,
+  getCharacterTextureSources,
+} from './createLayeredCharacter.js'
 
 const CHARACTER_SLOTS = [1, 2, 3]
 const TOTAL_SLOT_COUNT = 4
@@ -27,19 +32,16 @@ export async function createGameVisuals(
     getShowCharacters,
   },
 ) {
-  const [defaultTexture, bellTexture, madTexture, happyTexture] =
-    await Promise.all([
-      loadCharacterTexture('/sprites/guy/default.png'),
-      loadCharacterTexture('/sprites/guy/bell.png'),
-      loadCharacterTexture('/sprites/guy/mad.png'),
-      loadCharacterTexture('/sprites/guy/happy.png'),
-    ])
+  const textureSources = getCharacterTextureSources(GUY_VISUAL_CONFIG)
+  const loadedTextures = await Promise.all(
+    textureSources.map(loadCharacterTexture),
+  )
+  const textures = new Map(
+    textureSources.map((src, index) => [src, loadedTextures[index]]),
+  )
   const characterLayer = new Container()
   const characters = CHARACTER_SLOTS.map((slot) => {
-    const container = new Container()
-    const sprite = new Sprite(defaultTexture)
-    sprite.anchor.set(0.5)
-    container.addChild(sprite)
+    const visual = createLayeredCharacter(GUY_VISUAL_CONFIG, textures)
     if (slot === PLAYER_SLOT) {
       const label = new Text({
         text: 'You',
@@ -50,30 +52,30 @@ export async function createGameVisuals(
         },
       })
       label.anchor.set(0.5, 1)
-      container.addChild(label)
-      return { container, label, slot, sprite }
+      visual.container.addChild(label)
+      return { label, slot, visual }
     }
-    return { container, label: null, slot, sprite }
+    return { label: null, slot, visual }
   })
-  let playerPoseTimeRemaining = 0
-  let cpuMadTimeRemaining = 0
-  let happyTimeRemaining = 0
+  const charactersBySlot = new Map(
+    characters.map((character) => [character.slot, character]),
+  )
+  let activeCpuPoses = new Set()
 
-  characters.forEach(({ container }) => characterLayer.addChild(container))
+  characters.forEach(({ visual }) => characterLayer.addChild(visual.container))
   app.stage.addChild(characterLayer)
 
   function positionVisuals() {
-    const spriteSize = 220;
+    const spriteSize = 220
     const spacing = spriteSize * 0.65
     const rightMargin = app.screen.height * 0.2
     const rightmostX = app.screen.width - rightMargin - spriteSize / 2
     const startX = rightmostX - spacing * (TOTAL_SLOT_COUNT - 1)
     const centerY = app.screen.height - app.screen.height * 0.4
 
-    characters.forEach(({ container, label, slot, sprite }) => {
-      container.position.set(startX + spacing * slot, centerY)
-      sprite.width = spriteSize
-      sprite.height = spriteSize
+    characters.forEach(({ label, slot, visual }) => {
+      visual.container.position.set(startX + spacing * slot, centerY)
+      visual.setSize(spriteSize)
       if (label) label.position.set(0, -spriteSize * 0.52)
     })
   }
@@ -81,12 +83,24 @@ export async function createGameVisuals(
   function showFeedback(feedback) {
     if (!feedback) return
     if (feedback.noteIndex !== undefined) {
-      playerPoseTimeRemaining = getPerformance()?.poseDuration ?? 0.12
+      charactersBySlot
+        .get(PLAYER_SLOT)
+        .visual.playState(
+          'leftArm',
+          'up',
+          getPerformance()?.poseDuration ?? 0.12,
+        )
     }
     if (feedback.rating !== 'perfect') {
-      cpuMadTimeRemaining = MAD_DURATION
+      characters
+        .filter(({ slot }) => slot < PLAYER_SLOT)
+        .forEach(({ visual }) => {
+          visual.playState('face', 'mad', MAD_DURATION)
+        })
     } else if (feedback.noteIndex === undefined) {
-      happyTimeRemaining = HAPPY_DURATION
+      characters.forEach(({ visual }) => {
+        visual.playState('face', 'happy', HAPPY_DURATION)
+      })
     }
   }
 
@@ -94,39 +108,36 @@ export async function createGameVisuals(
     characterLayer.visible = getShowCharacters()
     if (!characterLayer.visible) return
 
-    if (playerPoseTimeRemaining > 0) {
-      playerPoseTimeRemaining -= ticker.deltaMS / 1000
-    }
-    if (cpuMadTimeRemaining > 0) {
-      cpuMadTimeRemaining -= ticker.deltaMS / 1000
-    }
-    if (happyTimeRemaining > 0) {
-      happyTimeRemaining -= ticker.deltaMS / 1000
-    }
+    const deltaSeconds = ticker.deltaMS / 1000
+    characters.forEach(({ visual }) => visual.update(deltaSeconds))
 
-    const active = Array(TOTAL_SLOT_COUNT).fill(false)
+    const currentCpuPoses = new Set()
     const performance = getPerformance()
     if (getIsPlaying() && performance) {
       const playbackTime = audioEngine.getPlaybackTime()
-      performance.cpuTurns.forEach((turn) => {
-        active[turn.character] = performance.notes.some(
-          (note) =>
-            playbackTime >= turn.startTime + note.time &&
-            playbackTime <
-              turn.startTime + note.time + performance.poseDuration,
-        )
-      })
-    }
-    active[PLAYER_SLOT] = playerPoseTimeRemaining > 0
-    characters.forEach(({ slot, sprite }) => {
-      if (happyTimeRemaining > 0) {
-        sprite.texture = happyTexture
-      } else if (slot < PLAYER_SLOT && cpuMadTimeRemaining > 0) {
-        sprite.texture = madTexture
-      } else {
-        sprite.texture = active[slot] ? bellTexture : defaultTexture
+      if (playbackTime !== null) {
+        performance.cpuTurns.forEach((turn) => {
+          performance.notes.forEach((note, noteIndex) => {
+            const poseStart = turn.startTime + note.time
+            const poseEnd = poseStart + performance.poseDuration
+            if (playbackTime < poseStart || playbackTime >= poseEnd) return
+
+            const poseKey = `${turn.character}:${turn.startTime}:${noteIndex}`
+            currentCpuPoses.add(poseKey)
+            if (!activeCpuPoses.has(poseKey)) {
+              charactersBySlot
+                .get(turn.character)
+                ?.visual.playState(
+                  'leftArm',
+                  'up',
+                  poseEnd - playbackTime,
+                )
+            }
+          })
+        })
       }
-    })
+    }
+    activeCpuPoses = currentCpuPoses
   }
 
   positionVisuals()
