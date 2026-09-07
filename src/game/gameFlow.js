@@ -66,7 +66,7 @@ function enterStep(state, config, initialStepIndex, initialDialogueLine = 0) {
         stepIndex,
         remainingNotes: step.numNotes,
         feedback: null,
-        performance: { instrument: step.instrument },
+        performance: { instruments: [step.instrument] },
         playerTurn: null,
       }
     }

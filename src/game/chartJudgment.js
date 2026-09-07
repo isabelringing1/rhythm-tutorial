@@ -11,12 +11,20 @@ export function judgeChartTap(
   attempt,
   { perfectWindow, goodWindow },
   inputEventType = 'press',
+  instrumentId,
 ) {
   let nearestIndex = -1
   let nearestError = Number.POSITIVE_INFINITY
 
   notes.forEach((note, index) => {
     if (attempt.judgments[index] !== null) return
+    if (
+      instrumentId !== undefined &&
+      typeof note !== 'number' &&
+      note.instrumentId !== instrumentId
+    ) {
+      return
+    }
     const noteTime = typeof note === 'number' ? note : note.time
     const error = Math.abs(tapTime - noteTime)
     if (error < nearestError) {
@@ -26,6 +34,8 @@ export function judgeChartTap(
   })
 
   const nearestNote = notes[nearestIndex]
+  const nearestNoteTime =
+    typeof nearestNote === 'number' ? nearestNote : nearestNote?.time
   const nearestEventType =
     typeof nearestNote === 'number' ? 'press' : nearestNote?.eventType
   if (
@@ -39,14 +49,13 @@ export function judgeChartTap(
         rating: 'miss',
         noteIndex: null,
         timingError: nearestError,
-        timingOffset: null,
+        timingOffset:
+          nearestNoteTime === undefined ? null : tapTime - nearestNoteTime,
       },
     }
   }
 
-  const noteTime =
-    typeof nearestNote === 'number' ? nearestNote : nearestNote.time
-  const timingOffset = tapTime - noteTime
+  const timingOffset = tapTime - nearestNoteTime
   const rating = nearestError <= perfectWindow ? 'perfect' : 'good'
   const judgments = [...attempt.judgments]
   judgments[nearestIndex] = rating

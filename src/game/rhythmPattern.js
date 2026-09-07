@@ -244,24 +244,13 @@ function validatePlayStep(step, index, defaults, instrumentsById) {
   if (typeof step.backingTrack !== 'string' || step.backingTrack === '') {
     throw new Error(`step ${index + 1}: backingTrack is required`)
   }
-  let instrument
-  if (instrumentsById) {
-    instrument = resolveInstrument(step, index, instrumentsById)
-    if (step.hitSound !== undefined) {
-      throw new Error(
-        `step ${index + 1}: hitSound has been replaced by instrumentId`,
-      )
-    }
-  } else {
-    if (typeof step.hitSound !== 'string' || step.hitSound === '') {
-      throw new Error(`step ${index + 1}: hitSound is required`)
-    }
-    instrument = {
-      id: 'legacy',
-      inputMode: 'keyPress',
-      keyBinding: 'KeyJ',
-      keyPressSound: step.hitSound,
-    }
+  if (!Array.isArray(step.patterns) || step.patterns.length === 0) {
+    throw new Error(`step ${index + 1}: patterns must be a non-empty array`)
+  }
+  if (step.instrumentId !== undefined || step.pattern !== undefined) {
+    throw new Error(
+      `step ${index + 1}: instrumentId and pattern must be defined inside patterns`,
+    )
   }
   if (
     !Number.isFinite(timing.perfectWindow) ||
@@ -272,20 +261,64 @@ function validatePlayStep(step, index, defaults, instrumentsById) {
     throw new Error(`step ${index + 1}: timing windows are invalid`)
   }
 
-  const chart = parseRhythmPattern(step.pattern, {
-    ...step,
-    inputMode: instrument.inputMode,
+  const instrumentIds = new Set()
+  const keyBindings = new Set()
+  const patterns = step.patterns.map((patternConfig) => {
+    if (!patternConfig || typeof patternConfig !== 'object') {
+      throw new Error(`step ${index + 1}: each pattern must be an object`)
+    }
+    const instrument = resolveInstrument(
+      { type: 'play', instrumentId: patternConfig.instrumentId },
+      index,
+      instrumentsById,
+    )
+    if (instrumentIds.has(instrument.id)) {
+      throw new Error(
+        `step ${index + 1}: duplicate pattern for instrument "${instrument.id}"`,
+      )
+    }
+    if (keyBindings.has(instrument.keyBinding)) {
+      throw new Error(
+        `step ${index + 1}: pattern instruments must use unique key bindings`,
+      )
+    }
+    instrumentIds.add(instrument.id)
+    keyBindings.add(instrument.keyBinding)
+
+    const chart = parseRhythmPattern(patternConfig.pattern, {
+      ...step,
+      inputMode: instrument.inputMode,
+    })
+    if (chart.barCount !== 1) {
+      throw new Error(
+        `step ${index + 1}: play patterns must contain one measure`,
+      )
+    }
+    return Object.freeze({
+      ...patternConfig,
+      instrument,
+      chart,
+    })
   })
-  if (chart.barCount !== 1) {
-    throw new Error(`step ${index + 1}: play patterns must contain one measure`)
-  }
+
+  const notes = patterns
+    .flatMap(({ chart, instrument }) =>
+      chart.notes.map((note) =>
+        Object.freeze({ ...note, instrumentId: instrument.id, instrument }),
+      ),
+    )
+    .sort((first, second) => first.time - second.time)
+  const chart = Object.freeze({
+    duration: patterns[0].chart.duration,
+    notes: Object.freeze(notes),
+  })
 
   return Object.freeze({
     ...step,
+    patterns: Object.freeze(patterns),
     requiredSuccesses,
     poseDuration: step.poseDuration ?? 0.12,
     timing: Object.freeze(timing),
-    instrument,
     chart,
   })
 }

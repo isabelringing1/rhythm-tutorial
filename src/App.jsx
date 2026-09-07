@@ -53,6 +53,18 @@ function getInstrumentSoundPaths(instrument) {
     : [instrument.keyDownSound, instrument.keyUpSound]
 }
 
+function logOffBeatTiming(judgment) {
+  if (
+    judgment.rating === 'perfect' ||
+    !Number.isFinite(judgment.timingOffset)
+  ) {
+    return
+  }
+  console.log(
+    `note off by ${Math.abs(judgment.timingOffset * 1000).toFixed(1)}ms`,
+  )
+}
+
 function loadPlayerDelay() {
   const savedDelay = Number(localStorage.getItem(PLAYER_DELAY_STORAGE_KEY))
   return Number.isFinite(savedDelay) ? savedDelay : 0
@@ -115,8 +127,13 @@ function App() {
       if (isPaused || isFormInput(event)) return
 
       const step = GAME_CONFIG.steps[gameState.stepIndex]
-      const { instrument } = step
-      if (event.code !== instrument.keyBinding) return
+      const instrument =
+        step.type === 'try'
+          ? step.instrument
+          : step.patterns.find(
+              (pattern) => pattern.instrument.keyBinding === event.code,
+            )?.instrument
+      if (!instrument || event.code !== instrument.keyBinding) return
 
       let inputEventType
       if (instrument.inputMode === 'keyPress') {
@@ -137,6 +154,7 @@ function App() {
           feedback: {
             id: event.timeStamp,
             inputEventType,
+            instrumentId: instrument.id,
             noteIndex: null,
             rating: 'perfect',
           },
@@ -161,6 +179,7 @@ function App() {
           feedback: {
             id: event.timeStamp,
             inputEventType,
+            instrumentId: instrument.id,
             noteIndex: null,
             rating: 'miss',
             timingError: Number.POSITIVE_INFINITY,
@@ -180,7 +199,9 @@ function App() {
           goodWindow: timing.goodWindow,
         },
         inputEventType,
+        instrument.id,
       )
+      logOffBeatTiming(result.judgment)
       attemptRef.current = result.attempt
       dispatch({
         type: 'FEEDBACK',
@@ -188,6 +209,7 @@ function App() {
           ...result.judgment,
           id: event.timeStamp,
           inputEventType,
+          instrumentId: instrument.id,
         },
       })
     }
@@ -378,7 +400,9 @@ function App() {
           audioEngine.stopTrack()
           await audioEngine.preload([
             step.backingTrack,
-            ...getInstrumentSoundPaths(step.instrument),
+            ...step.patterns.flatMap(({ instrument }) =>
+              getInstrumentSoundPaths(instrument),
+            ),
           ])
           await audioEngine.startTrack(step.backingTrack, { loop: true })
           activeTrackStepRef.current = gameState.stepIndex
@@ -409,7 +433,7 @@ function App() {
         const playerEnd = playerStart + step.chart.duration
         const performanceData = {
           cpuTurns,
-          instrument: step.instrument,
+          instruments: step.patterns.map(({ instrument }) => instrument),
           notes: step.chart.notes,
           playerStart,
           playerEnd,
@@ -420,7 +444,7 @@ function App() {
           cpuTurns.flatMap((turn) =>
             step.chart.notes.map((note) =>
               audioEngine.scheduleSound(
-                getInstrumentSound(step.instrument, note.eventType),
+                getInstrumentSound(note.instrument, note.eventType),
                 turn.startTime + note.time,
               ),
             ),
@@ -645,7 +669,7 @@ function App() {
         gameState.mode !== 'error' && (
           <div className="game-debug-tools">
             {activeStep?.type === 'play' && (
-              <RhythmPreview chart={activeStep.chart} />
+              <RhythmPreview patterns={activeStep.patterns} />
             )}
             <DebugMenu onSkip={handleSkipStep} />
           </div>

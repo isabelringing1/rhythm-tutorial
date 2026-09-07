@@ -99,7 +99,9 @@ export async function createGameVisuals(
     if (!feedback) return
     const performance = getPerformance()
     const characterAction =
-      performance?.instrument.characterActions[feedback.inputEventType]
+      performance?.instruments
+        .find((instrument) => instrument.id === feedback.instrumentId)
+        ?.characterActions[feedback.inputEventType]
     if (characterAction) {
       playCharacterAction(
         charactersBySlot.get(PLAYER_SLOT).visual,
@@ -156,7 +158,7 @@ export async function createGameVisuals(
         performance.cpuTurns.forEach((turn) => {
           performance.notes.forEach((note, noteIndex) => {
             const characterAction =
-              performance.instrument.characterActions[note.eventType]
+              note.instrument.characterActions[note.eventType]
             const poseStart = turn.startTime + note.time
             const poseDuration =
               characterAction.duration === 'untilKeyUp'

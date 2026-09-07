@@ -24,8 +24,12 @@ const rawGameConfig = {
       bpm: 125,
       beatsPerBar: 4,
       stepsPerBeat: 4,
-      instrumentId: 'bell',
-      pattern: 'x... .... .... ....',
+      patterns: [
+        {
+          instrumentId: 'bell',
+          pattern: 'x... .... .... ....',
+        },
+      ],
       backingTrack: '/audio/bottle.mp3',
       requiredSuccesses: 3,
       poseDuration: 0.12,
@@ -43,8 +47,12 @@ const rawGameConfig = {
       bpm: 125,
       beatsPerBar: 4,
       stepsPerBeat: 4,
-      instrumentId: 'bell',
-      pattern: 'x..x .... x... ....',
+      patterns: [
+        {
+          instrumentId: 'bell',
+          pattern: 'x..x .... x... ....',
+        },
+      ],
       backingTrack: '/audio/bottle.mp3',
       requiredSuccesses: 3,
       poseDuration: 0.12,
@@ -80,8 +88,37 @@ const rawGameConfig = {
       bpm: 125,
       beatsPerBar: 4,
       stepsPerBeat: 4,
-      instrumentId: 'pen',
-      pattern: 'd..u .... d... u...',
+      patterns: [
+        {
+          instrumentId: 'pen',
+          pattern: 'd..u .... d... u...',
+        },
+      ],
+      backingTrack: '/audio/bottle.mp3',
+      requiredSuccesses: 3,
+      poseDuration: 0.12,
+    },
+    {
+      type: 'dialogue',
+      lines: [
+        'Good. But can you handle playing both instruments at once?'
+      ]
+    },
+    {
+      type: 'play',
+      bpm: 125,
+      beatsPerBar: 4,
+      stepsPerBeat: 4,
+      patterns: [
+        {
+          instrumentId: 'bell',
+          pattern: 'x..x .... .... ....',
+        },
+        {
+          instrumentId: 'pen',
+          pattern: '.... .... d... u...',
+        },
+      ],
       backingTrack: '/audio/bottle.mp3',
       requiredSuccesses: 3,
       poseDuration: 0.12,
