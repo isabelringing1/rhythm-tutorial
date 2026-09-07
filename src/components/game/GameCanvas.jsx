@@ -5,7 +5,9 @@ import { createGameVisuals } from '../../game/createGameVisuals.js'
 
 export function GameCanvas({
   audioEngine,
+  dialogueCharacterStates,
   feedback,
+  flags,
   isCalibrating,
   isPlaying,
   performance,
@@ -14,7 +16,9 @@ export function GameCanvas({
 }) {
   const containerRef = useRef(null)
   const sceneRef = useRef(null)
+  const dialogueCharacterStatesRef = useRef(dialogueCharacterStates)
   const feedbackRef = useRef(feedback)
+  const flagsRef = useRef(flags)
   const isCalibratingRef = useRef(isCalibrating)
   const isPlayingRef = useRef(isPlaying)
   const performanceRef = useRef(performance)
@@ -48,7 +52,9 @@ export function GameCanvas({
       })
       const game = await createGameVisuals(app, {
           audioEngine,
+        getDialogueCharacterStates: () => dialogueCharacterStatesRef.current,
           getFeedback: () => feedbackRef.current,
+        getFlags: () => flagsRef.current,
           getIsPlaying: () => isPlayingRef.current,
           getPerformance: () => performanceRef.current,
           getShowCharacters: () => showCharactersRef.current,
@@ -76,9 +82,19 @@ export function GameCanvas({
   }, [audioEngine])
 
   useEffect(() => {
+    dialogueCharacterStatesRef.current = dialogueCharacterStates
+    sceneRef.current?.game.showDialogueCharacterStates(dialogueCharacterStates)
+  }, [dialogueCharacterStates])
+
+  useEffect(() => {
     feedbackRef.current = feedback
     sceneRef.current?.game.showFeedback(feedback)
   }, [feedback])
+
+  useEffect(() => {
+    flagsRef.current = flags
+    sceneRef.current?.game.setFlags(flags)
+  }, [flags])
 
   useEffect(() => {
     isCalibratingRef.current = isCalibrating

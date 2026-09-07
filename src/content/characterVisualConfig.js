@@ -19,7 +19,10 @@ export const GUY_VISUAL_CONFIG = Object.freeze({
       type: 'stateful',
       defaultState: 'default',
       states: Object.freeze({
-        default: '/sprites/guy/right%20arm/default_empty.png',
+        default: Object.freeze({
+          '': '/sprites/guy/right%20arm/default_empty.png',
+          pen: '/sprites/guy/right%20arm/default.png',
+        }),
         upPressed: '/sprites/guy/right%20arm/up%20pressed.png',
         upReleased: '/sprites/guy/right%20arm/up%20released.png',
       }),

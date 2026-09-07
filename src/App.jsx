@@ -7,6 +7,7 @@ import {
 } from 'react'
 import { AudioEngine } from './audio/AudioEngine.js'
 import { GameCanvas } from './components/game/GameCanvas.jsx'
+import { DebugMenu } from './components/ui/DebugMenu.jsx'
 import { DialogueBox } from './components/ui/DialogueBox.jsx'
 import { RhythmPreview } from './components/ui/RhythmPreview.jsx'
 import { RoundCounter } from './components/ui/RoundCounter.jsx'
@@ -444,13 +445,30 @@ function App() {
     dispatch({ type: 'RESET' })
   }
 
+  function handleSkipStep() {
+    audioEngine.stop()
+    activeTrackStepRef.current = null
+    transitionRef.current = null
+    nextAttemptStartRef.current = null
+    setIsPaused(false)
+    dispatch({ type: 'SKIP_STEP' })
+  }
+
   const activeStep = GAME_CONFIG.steps[gameState.stepIndex]
-  const previousStep = GAME_CONFIG.steps[gameState.stepIndex - 1]
+  const previousStep = GAME_CONFIG.steps
+    .slice(0, gameState.stepIndex)
+    .findLast((step) => step.type !== 'flag')
+  const dialogueCharacterStates =
+    gameState.mode === 'dialogue'
+      ? (activeStep.lineToCharacterState?.[gameState.dialogueLine] ?? null)
+      : null
   const stickyDialogueText =
     activeStep?.type === 'play' &&
     previousStep?.type === 'dialogue' &&
     previousStep.lastLineStick
-      ? previousStep.lines.at(-1)
+      ? previousStep.lines.findLast(
+          (_, lineIndex) => !previousStep.lineFlags[lineIndex],
+        )
       : null
   const isPlaying =
     gameState.mode === 'cpuTurn' ||
@@ -466,7 +484,9 @@ function App() {
     <main className="app-shell">
       <GameCanvas
         audioEngine={audioEngine}
+        dialogueCharacterStates={dialogueCharacterStates}
         feedback={gameState.feedback}
+        flags={gameState.flags}
         isCalibrating={calibrationStatus === 'calibrating'}
         isPlaying={isPlaying && !isPaused}
         performance={gameState.performance}
@@ -521,9 +541,17 @@ function App() {
           </button>
         </div>
       )}
-      {import.meta.env.DEV && activeStep?.type === 'play' && (
-        <RhythmPreview chart={activeStep.chart} />
-      )}
+      {import.meta.env.DEV &&
+        gameState.mode !== 'menu' &&
+        gameState.mode !== 'complete' &&
+        gameState.mode !== 'error' && (
+          <div className="game-debug-tools">
+            {activeStep?.type === 'play' && (
+              <RhythmPreview chart={activeStep.chart} />
+            )}
+            <DebugMenu onSkip={handleSkipStep} />
+          </div>
+        )}
       <TimingDebug
         canPause={
           gameState.mode === 'cpuTurn' || gameState.mode === 'playerTurn'

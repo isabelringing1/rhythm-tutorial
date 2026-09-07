@@ -54,9 +54,15 @@ const rawGameConfig = {
       lines: [
         'Great! Try to remember that when the real thing starts.',
         '...Oh, you thought we were starting now? Sorry, there\'s more.',
+        '[{pen}=true]',
+        'Look! You have a pen. One of those clicky ones, too.',
+        'Press and release K to click the pen. Here, try it out a bit.'
       ],
+      lineToCharacterState: {
+        3: [[2, 'face', 'lookRight']],
+      },
       lastLineStick: true,
-    },
+    }
   ],
 }
 

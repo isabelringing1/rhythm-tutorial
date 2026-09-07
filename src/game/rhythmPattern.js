@@ -1,3 +1,8 @@
+import {
+  isValidFlagId,
+  parseInlineFlagDirective,
+} from './flags.js'
+
 const HIT_SYMBOL = 'x'
 const REST_SYMBOL = '.'
 
@@ -96,12 +101,98 @@ function validateDialogueStep(step, index) {
   if (!Array.isArray(step.lines) || step.lines.length === 0) {
     throw new Error(`step ${index + 1}: dialogue must contain at least one line`)
   }
+  const lineFlags = {}
+  let visibleLineCount = 0
   step.lines.forEach((line, lineIndex) => {
     if (typeof line !== 'string' || line.trim() === '') {
       throw new Error(
         `step ${index + 1}: dialogue line ${lineIndex + 1} must be text`,
       )
     }
+
+    const flag = parseInlineFlagDirective(line)
+    if (flag) {
+      lineFlags[lineIndex] = flag
+    } else if (line.startsWith('[{')) {
+      throw new Error(
+        `step ${index + 1}: dialogue line ${lineIndex + 1} contains an invalid flag directive`,
+      )
+    } else {
+      visibleLineCount += 1
+    }
+  })
+  if (visibleLineCount === 0) {
+    throw new Error(
+      `step ${index + 1}: dialogue must contain at least one visible line`,
+    )
+  }
+
+  const lineToCharacterState = step.lineToCharacterState ?? {}
+  if (
+    typeof lineToCharacterState !== 'object' ||
+    Array.isArray(lineToCharacterState)
+  ) {
+    throw new Error(
+      `step ${index + 1}: lineToCharacterState must be an object`,
+    )
+  }
+
+  const normalizedCharacterStates = {}
+  Object.entries(lineToCharacterState).forEach(([lineKey, characterStates]) => {
+    const lineIndex = Number(lineKey)
+    if (
+      !Number.isInteger(lineIndex) ||
+      lineIndex < 0 ||
+      lineIndex >= step.lines.length
+    ) {
+      throw new Error(
+        `step ${index + 1}: dialogue character state line "${lineKey}" is invalid`,
+      )
+    }
+    if (
+      !Array.isArray(characterStates) ||
+      characterStates.some(
+        (characterState) =>
+          !Array.isArray(characterState) ||
+          characterState.length !== 3 ||
+          !Number.isInteger(characterState[0]) ||
+          characterState[0] < 0 ||
+          typeof characterState[1] !== 'string' ||
+          characterState[1] === '' ||
+          typeof characterState[2] !== 'string' ||
+          characterState[2] === '',
+      )
+    ) {
+      throw new Error(
+        `step ${index + 1}: dialogue character states for line ${lineIndex} must be an array of [characterIndex, stateId, state] entries`,
+      )
+    }
+
+    normalizedCharacterStates[lineIndex] = Object.freeze(
+      characterStates.map((characterState) =>
+        Object.freeze([...characterState]),
+      ),
+    )
+  })
+
+  return {
+    lineFlags: Object.freeze(lineFlags),
+    lineToCharacterState: Object.freeze(normalizedCharacterStates),
+  }
+}
+
+function validateFlagStep(step, index) {
+  if (!isValidFlagId(step.id)) {
+    throw new Error(`step ${index + 1}: flag id is invalid`)
+  }
+  if (typeof step.value !== 'boolean') {
+    throw new Error(`step ${index + 1}: flag value must be true or false`)
+  }
+
+  return Object.freeze({
+    type: 'flag',
+    id: step.id,
+    value: step.value,
   })
 }
 
@@ -155,11 +246,22 @@ export function compileGameConfig(config) {
 
   const steps = config.steps.map((step, index) => {
     if (step.type === 'dialogue') {
-      validateDialogueStep(step, index)
-      return Object.freeze({ ...step, lines: Object.freeze([...step.lines]) })
+      const { lineFlags, lineToCharacterState } = validateDialogueStep(
+        step,
+        index,
+      )
+      return Object.freeze({
+        ...step,
+        lines: Object.freeze([...step.lines]),
+        lineFlags,
+        lineToCharacterState,
+      })
     }
     if (step.type === 'play') {
       return validatePlayStep(step, index, defaults)
+    }
+    if (step.type === 'flag') {
+      return validateFlagStep(step, index)
     }
     throw new Error(`step ${index + 1}: unknown type "${step.type}"`)
   })

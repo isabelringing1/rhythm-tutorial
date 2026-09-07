@@ -1,3 +1,5 @@
+import { getStatePathSources } from './flags.js'
+
 function validateConfig(config) {
   if (!config || !Array.isArray(config.layers)) {
     throw new Error('character visual config must contain a layers array')
@@ -30,6 +32,7 @@ function validateConfig(config) {
         `stateful layer "${layer.id}" must define states and a valid defaultState`,
       )
     }
+    Object.values(layer.states).forEach(getStatePathSources)
   })
 }
 
@@ -59,6 +62,16 @@ export function createCharacterStateMachine(config) {
   }
 
   return {
+    setState(category, state) {
+      const entry = getCategory(category)
+      if (!entry.states[state]) {
+        throw new Error(`unknown state "${state}" for category "${category}"`)
+      }
+
+      entry.currentState = state
+      entry.remaining = 0
+    },
+
     playState(category, state, duration) {
       const entry = getCategory(category)
       if (!entry.states[state]) {
@@ -74,6 +87,12 @@ export function createCharacterStateMachine(config) {
 
     getState(category) {
       return getCategory(category).currentState
+    },
+
+    resetState(category) {
+      const entry = getCategory(category)
+      entry.currentState = entry.defaultState
+      entry.remaining = 0
     },
 
     update(deltaSeconds) {

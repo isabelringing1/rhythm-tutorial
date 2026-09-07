@@ -26,7 +26,9 @@ export async function createGameVisuals(
   app,
   {
     audioEngine,
+    getDialogueCharacterStates,
     getFeedback,
+    getFlags,
     getIsPlaying,
     getPerformance,
     getShowCharacters,
@@ -41,7 +43,11 @@ export async function createGameVisuals(
   )
   const characterLayer = new Container()
   const characters = CHARACTER_SLOTS.map((slot) => {
-    const visual = createLayeredCharacter(GUY_VISUAL_CONFIG, textures)
+    const visual = createLayeredCharacter(
+      GUY_VISUAL_CONFIG,
+      textures,
+      getFlags(),
+    )
     if (slot === PLAYER_SLOT) {
       const label = new Text({
         text: 'You',
@@ -61,6 +67,7 @@ export async function createGameVisuals(
     characters.map((character) => [character.slot, character]),
   )
   let activeCpuPoses = new Set()
+  let activeDialogueStates = []
 
   characters.forEach(({ visual }) => characterLayer.addChild(visual.container))
   app.stage.addChild(characterLayer)
@@ -104,6 +111,28 @@ export async function createGameVisuals(
     }
   }
 
+  function showDialogueCharacterStates(characterStates) {
+    activeDialogueStates.forEach(({ category, visual }) => {
+      visual.resetState(category)
+    })
+    activeDialogueStates = []
+    if (!characterStates) return
+
+    characterStates.forEach(([characterIndex, category, state]) => {
+      const character = characters[characterIndex]
+      if (!character) {
+        throw new Error(`unknown dialogue character index "${characterIndex}"`)
+      }
+
+      character.visual.setState(category, state)
+      activeDialogueStates.push({ category, visual: character.visual })
+    })
+  }
+
+  function setFlags(flags) {
+    characters.forEach(({ visual }) => visual.setFlags(flags))
+  }
+
   function update(ticker) {
     characterLayer.visible = getShowCharacters()
     if (!characterLayer.visible) return
@@ -142,10 +171,13 @@ export async function createGameVisuals(
 
   positionVisuals()
   showFeedback(getFeedback())
+  showDialogueCharacterStates(getDialogueCharacterStates())
   app.renderer.on('resize', positionVisuals)
   app.ticker.add(update)
 
   return {
+    setFlags,
+    showDialogueCharacterStates,
     showFeedback,
     destroy() {
       app.renderer.off('resize', positionVisuals)

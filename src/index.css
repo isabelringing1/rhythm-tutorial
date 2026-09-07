@@ -198,16 +198,38 @@ button {
   opacity: 0.5;
 }
 
-.rhythm-preview {
+.game-debug-tools {
   position: fixed;
   bottom: 16px;
   left: 16px;
   z-index: 3;
+  display: grid;
+  gap: 8px;
   width: min(420px, calc(100vw - 238px));
+}
+
+.rhythm-preview,
+.debug-menu {
   padding: 8px 10px;
   background: rgb(255 255 255 / 94%);
   border: 1px solid black;
   font-size: 12px;
+}
+
+.debug-menu {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.debug-menu button {
+  padding: 4px 8px;
+  color: black;
+  background: white;
+  border: 1px solid black;
+  font: inherit;
+  cursor: pointer;
 }
 
 .rhythm-preview summary {
@@ -270,7 +292,7 @@ button {
     display: none;
   }
 
-  .rhythm-preview {
+  .game-debug-tools {
     right: 12px;
     bottom: 12px;
     left: 12px;

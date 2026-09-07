@@ -8,20 +8,61 @@ export const initialGameState = Object.freeze({
   performance: null,
   playerTurn: null,
   error: null,
+  flags: Object.freeze({}),
 })
 
-function enterStep(state, config, stepIndex) {
-  if (stepIndex >= config.steps.length) {
-    return { ...initialGameState, mode: 'complete' }
+function applyFlag(state, flag) {
+  return {
+    ...state,
+    flags: {
+      ...state.flags,
+      [flag.id]: flag.value,
+    },
   }
+}
 
-  const step = config.steps[stepIndex]
-  if (step.type === 'dialogue') {
+function enterStep(state, config, initialStepIndex, initialDialogueLine = 0) {
+  let nextState = state
+  let stepIndex = initialStepIndex
+  let dialogueLine = initialDialogueLine
+
+  while (stepIndex < config.steps.length) {
+    const step = config.steps[stepIndex]
+    if (step.type === 'flag') {
+      nextState = applyFlag(nextState, step)
+      stepIndex += 1
+      dialogueLine = 0
+      continue
+    }
+
+    if (step.type === 'dialogue') {
+      while (dialogueLine < step.lines.length && step.lineFlags?.[dialogueLine]) {
+        nextState = applyFlag(nextState, step.lineFlags[dialogueLine])
+        dialogueLine += 1
+      }
+      if (dialogueLine >= step.lines.length) {
+        stepIndex += 1
+        dialogueLine = 0
+        continue
+      }
+
+      return {
+        ...nextState,
+        mode: 'dialogue',
+        stepIndex,
+        dialogueLine,
+        feedback: null,
+        performance: null,
+        playerTurn: null,
+      }
+    }
+
     return {
-      ...state,
-      mode: 'dialogue',
+      ...nextState,
+      mode: 'loadingPlay',
       stepIndex,
-      dialogueLine: 0,
+      remainingSuccesses: step.requiredSuccesses,
+      attemptNumber: 0,
       feedback: null,
       performance: null,
       playerTurn: null,
@@ -29,30 +70,54 @@ function enterStep(state, config, stepIndex) {
   }
 
   return {
-    ...state,
-    mode: 'loadingPlay',
-    stepIndex,
-    remainingSuccesses: step.requiredSuccesses,
-    attemptNumber: 0,
+    ...nextState,
+    mode: 'complete',
+    stepIndex: config.steps.length,
     feedback: null,
     performance: null,
     playerTurn: null,
   }
 }
 
+function skipStep(state, config) {
+  if (
+    state.mode === 'menu' ||
+    state.mode === 'complete' ||
+    state.mode === 'error'
+  ) {
+    return state
+  }
+
+  let nextState = state
+  const step = config.steps[state.stepIndex]
+  if (step.type === 'dialogue') {
+    for (
+      let lineIndex = state.dialogueLine + 1;
+      lineIndex < step.lines.length;
+      lineIndex += 1
+    ) {
+      if (step.lineFlags?.[lineIndex]) {
+        nextState = applyFlag(nextState, step.lineFlags[lineIndex])
+      }
+    }
+  }
+
+  return enterStep(nextState, config, state.stepIndex + 1)
+}
+
 export function createGameFlowReducer(config) {
   return function gameFlowReducer(state, action) {
-    const step = config.steps[state.stepIndex]
-
     switch (action.type) {
       case 'START':
-        return enterStep(state, config, 0)
+        return enterStep({ ...initialGameState }, config, 0)
       case 'NEXT_DIALOGUE':
         if (state.mode !== 'dialogue') return state
-        if (state.dialogueLine < step.lines.length - 1) {
-          return { ...state, dialogueLine: state.dialogueLine + 1 }
-        }
-        return enterStep(state, config, state.stepIndex + 1)
+        return enterStep(
+          state,
+          config,
+          state.stepIndex,
+          state.dialogueLine + 1,
+        )
       case 'PLAY_READY':
         return {
           ...state,
@@ -92,6 +157,8 @@ export function createGameFlowReducer(config) {
         }
       case 'PLAY_COMPLETE':
         return enterStep(state, config, state.stepIndex + 1)
+      case 'SKIP_STEP':
+        return skipStep(state, config)
       case 'FAIL':
         return {
           ...initialGameState,
