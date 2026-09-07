@@ -3,8 +3,11 @@ import {
   parseInlineFlagDirective,
 } from './flags.js'
 
-const HIT_SYMBOL = 'x'
 const REST_SYMBOL = '.'
+const SYMBOLS_BY_INPUT_MODE = Object.freeze({
+  keyPress: Object.freeze({ x: 'press' }),
+  keyDownUp: Object.freeze({ d: 'down', u: 'up' }),
+})
 
 function assertPositiveInteger(value, field) {
   if (!Number.isInteger(value) || value <= 0) {
@@ -14,7 +17,12 @@ function assertPositiveInteger(value, field) {
 
 export function parseRhythmPattern(
   pattern,
-  { bpm, beatsPerBar = 4, stepsPerBeat = 4 },
+  {
+    bpm,
+    beatsPerBar = 4,
+    stepsPerBeat = 4,
+    inputMode = 'keyPress',
+  },
 ) {
   if (typeof pattern !== 'string' || pattern.trim() === '') {
     throw new Error('pattern must be a non-empty string')
@@ -24,6 +32,10 @@ export function parseRhythmPattern(
   }
   assertPositiveInteger(beatsPerBar, 'beatsPerBar')
   assertPositiveInteger(stepsPerBeat, 'stepsPerBeat')
+  const eventTypeBySymbol = SYMBOLS_BY_INPUT_MODE[inputMode]
+  if (!eventTypeBySymbol) {
+    throw new Error(`unknown instrument input mode "${inputMode}"`)
+  }
 
   const bars = pattern.split('|').map((bar) => bar.trim())
   if (bars.some((bar) => bar === '')) {
@@ -50,18 +62,19 @@ export function parseRhythmPattern(
       }
 
       ;[...beat].forEach((symbol, stepIndex) => {
-        if (symbol !== HIT_SYMBOL && symbol !== REST_SYMBOL) {
+        if (symbol !== REST_SYMBOL && !eventTypeBySymbol[symbol]) {
           throw new Error(
             `invalid rhythm symbol "${symbol}" at bar ${barIndex + 1}, beat ${beatIndex + 1}`,
           )
         }
-        if (symbol === HIT_SYMBOL) {
+        if (symbol !== REST_SYMBOL) {
           const absoluteBeat = barIndex * beatsPerBar + beatIndex
           notes.push({
             bar: barIndex,
             beat: beatIndex,
             step: stepIndex,
             time: absoluteBeat * secondsPerBeat + stepIndex * secondsPerStep,
+            eventType: eventTypeBySymbol[symbol],
           })
         }
       })
@@ -196,7 +209,34 @@ function validateFlagStep(step, index) {
   })
 }
 
-function validatePlayStep(step, index, defaults) {
+function resolveInstrument(step, index, instrumentsById) {
+  if (!instrumentsById) {
+    throw new Error(
+      `step ${index + 1}: instrument config is required for "${step.type}" steps`,
+    )
+  }
+  if (typeof step.instrumentId !== 'string' || step.instrumentId === '') {
+    throw new Error(`step ${index + 1}: instrumentId is required`)
+  }
+
+  const instrument = instrumentsById.get(step.instrumentId)
+  if (!instrument) {
+    throw new Error(
+      `step ${index + 1}: unknown instrument "${step.instrumentId}"`,
+    )
+  }
+  return instrument
+}
+
+function validateTryStep(step, index, instrumentsById) {
+  assertPositiveInteger(step.numNotes, `step ${index + 1} numNotes`)
+  return Object.freeze({
+    ...step,
+    instrument: resolveInstrument(step, index, instrumentsById),
+  })
+}
+
+function validatePlayStep(step, index, defaults, instrumentsById) {
   const timing = { ...defaults.timing, ...step.timing }
   const requiredSuccesses = step.requiredSuccesses ?? 3
   assertPositiveInteger(requiredSuccesses, `step ${index + 1} requiredSuccesses`)
@@ -204,8 +244,24 @@ function validatePlayStep(step, index, defaults) {
   if (typeof step.backingTrack !== 'string' || step.backingTrack === '') {
     throw new Error(`step ${index + 1}: backingTrack is required`)
   }
-  if (typeof step.hitSound !== 'string' || step.hitSound === '') {
-    throw new Error(`step ${index + 1}: hitSound is required`)
+  let instrument
+  if (instrumentsById) {
+    instrument = resolveInstrument(step, index, instrumentsById)
+    if (step.hitSound !== undefined) {
+      throw new Error(
+        `step ${index + 1}: hitSound has been replaced by instrumentId`,
+      )
+    }
+  } else {
+    if (typeof step.hitSound !== 'string' || step.hitSound === '') {
+      throw new Error(`step ${index + 1}: hitSound is required`)
+    }
+    instrument = {
+      id: 'legacy',
+      inputMode: 'keyPress',
+      keyBinding: 'KeyJ',
+      keyPressSound: step.hitSound,
+    }
   }
   if (
     !Number.isFinite(timing.perfectWindow) ||
@@ -216,7 +272,10 @@ function validatePlayStep(step, index, defaults) {
     throw new Error(`step ${index + 1}: timing windows are invalid`)
   }
 
-  const chart = parseRhythmPattern(step.pattern, step)
+  const chart = parseRhythmPattern(step.pattern, {
+    ...step,
+    inputMode: instrument.inputMode,
+  })
   if (chart.barCount !== 1) {
     throw new Error(`step ${index + 1}: play patterns must contain one measure`)
   }
@@ -226,11 +285,12 @@ function validatePlayStep(step, index, defaults) {
     requiredSuccesses,
     poseDuration: step.poseDuration ?? 0.12,
     timing: Object.freeze(timing),
+    instrument,
     chart,
   })
 }
 
-export function compileGameConfig(config) {
+export function compileGameConfig(config, instruments) {
   if (!config || !Array.isArray(config.steps) || config.steps.length === 0) {
     throw new Error('game config must contain at least one step')
   }
@@ -243,6 +303,9 @@ export function compileGameConfig(config) {
       ...config.defaults?.timing,
     },
   }
+  const instrumentsById = instruments
+    ? new Map(instruments.map((instrument) => [instrument.id, instrument]))
+    : null
 
   const steps = config.steps.map((step, index) => {
     if (step.type === 'dialogue') {
@@ -258,7 +321,10 @@ export function compileGameConfig(config) {
       })
     }
     if (step.type === 'play') {
-      return validatePlayStep(step, index, defaults)
+      return validatePlayStep(step, index, defaults, instrumentsById)
+    }
+    if (step.type === 'try') {
+      return validateTryStep(step, index, instrumentsById)
     }
     if (step.type === 'flag') {
       return validateFlagStep(step, index)

@@ -3,6 +3,7 @@ export const initialGameState = Object.freeze({
   stepIndex: 0,
   dialogueLine: 0,
   remainingSuccesses: 0,
+  remainingNotes: 0,
   attemptNumber: 0,
   feedback: null,
   performance: null,
@@ -51,8 +52,21 @@ function enterStep(state, config, initialStepIndex, initialDialogueLine = 0) {
         mode: 'dialogue',
         stepIndex,
         dialogueLine,
+        remainingNotes: 0,
         feedback: null,
         performance: null,
+        playerTurn: null,
+      }
+    }
+
+    if (step.type === 'try') {
+      return {
+        ...nextState,
+        mode: 'try',
+        stepIndex,
+        remainingNotes: step.numNotes,
+        feedback: null,
+        performance: { instrument: step.instrument },
         playerTurn: null,
       }
     }
@@ -62,6 +76,7 @@ function enterStep(state, config, initialStepIndex, initialDialogueLine = 0) {
       mode: 'loadingPlay',
       stepIndex,
       remainingSuccesses: step.requiredSuccesses,
+      remainingNotes: 0,
       attemptNumber: 0,
       feedback: null,
       performance: null,
@@ -73,6 +88,7 @@ function enterStep(state, config, initialStepIndex, initialDialogueLine = 0) {
     ...nextState,
     mode: 'complete',
     stepIndex: config.steps.length,
+    remainingNotes: 0,
     feedback: null,
     performance: null,
     playerTurn: null,
@@ -135,6 +151,16 @@ export function createGameFlowReducer(config) {
         }
       case 'FEEDBACK':
         return { ...state, feedback: action.feedback }
+      case 'TRY_NOTE':
+        if (state.mode !== 'try' || state.remainingNotes <= 0) return state
+        return {
+          ...state,
+          remainingNotes: state.remainingNotes - 1,
+          feedback: action.feedback,
+        }
+      case 'TRY_COMPLETE':
+        if (state.mode !== 'try' || state.remainingNotes !== 0) return state
+        return enterStep(state, config, state.stepIndex + 1)
       case 'ATTEMPT_RESULT': {
         const remainingSuccesses = action.isPerfect
           ? state.remainingSuccesses - 1

@@ -1,4 +1,5 @@
 import { compileGameConfig } from '../game/rhythmPattern.js'
+import { INSTRUMENTS } from './instrumentConfig.js'
 
 const rawGameConfig = {
   defaults: {
@@ -23,9 +24,9 @@ const rawGameConfig = {
       bpm: 125,
       beatsPerBar: 4,
       stepsPerBeat: 4,
+      instrumentId: 'bell',
       pattern: 'x... .... .... ....',
       backingTrack: '/audio/bottle.mp3',
-      hitSound: '/audio/bell.wav',
       requiredSuccesses: 3,
       poseDuration: 0.12,
     },
@@ -42,13 +43,12 @@ const rawGameConfig = {
       bpm: 125,
       beatsPerBar: 4,
       stepsPerBeat: 4,
+      instrumentId: 'bell',
       pattern: 'x..x .... x... ....',
       backingTrack: '/audio/bottle.mp3',
-      hitSound: '/audio/bell.wav',
       requiredSuccesses: 3,
       poseDuration: 0.12,
     },
-
     {
       type: 'dialogue',
       lines: [
@@ -56,14 +56,37 @@ const rawGameConfig = {
         '...Oh, you thought we were starting now? Sorry, there\'s more.',
         '[{pen}=true]',
         'Look! You have a pen. One of those clicky ones, too.',
-        'Press and release K to click the pen. Here, try it out a bit.'
+        'Press and release K to click the pen. Here, try it out a bit.',
       ],
       lineToCharacterState: {
         3: [[2, 'face', 'lookRight']],
       },
       lastLineStick: true,
-    }
+    },
+    {
+      type: 'try',
+      instrumentId: 'pen',
+      numNotes: 14,
+    },
+    {
+      type: 'dialogue',
+      lines: [
+        'Okay, okay!',
+        'Let\'s practice with the pen in line now.',
+      ]
+    },
+    {
+      type: 'play',
+      bpm: 125,
+      beatsPerBar: 4,
+      stepsPerBeat: 4,
+      instrumentId: 'pen',
+      pattern: 'd..u .... d... u...',
+      backingTrack: '/audio/bottle.mp3',
+      requiredSuccesses: 3,
+      poseDuration: 0.12,
+    },
   ],
 }
 
-export const GAME_CONFIG = compileGameConfig(rawGameConfig)
+export const GAME_CONFIG = compileGameConfig(rawGameConfig, INSTRUMENTS)

@@ -22,6 +22,14 @@ function loadCharacterTexture(src) {
   })
 }
 
+function playCharacterAction(visual, action, duration = action.duration) {
+  if (action.duration === 'untilKeyUp') {
+    visual.setState(action.category, action.state)
+    return
+  }
+  visual.playState(action.category, action.state, duration)
+}
+
 export async function createGameVisuals(
   app,
   {
@@ -89,14 +97,14 @@ export async function createGameVisuals(
 
   function showFeedback(feedback) {
     if (!feedback) return
-    if (feedback.noteIndex !== undefined) {
-      charactersBySlot
-        .get(PLAYER_SLOT)
-        .visual.playState(
-          'leftArm',
-          'up',
-          getPerformance()?.poseDuration ?? 0.12,
-        )
+    const performance = getPerformance()
+    const characterAction =
+      performance?.instrument.characterActions[feedback.inputEventType]
+    if (characterAction) {
+      playCharacterAction(
+        charactersBySlot.get(PLAYER_SLOT).visual,
+        characterAction,
+      )
     }
     if (feedback.rating !== 'perfect') {
       characters
@@ -147,20 +155,27 @@ export async function createGameVisuals(
       if (playbackTime !== null) {
         performance.cpuTurns.forEach((turn) => {
           performance.notes.forEach((note, noteIndex) => {
+            const characterAction =
+              performance.instrument.characterActions[note.eventType]
             const poseStart = turn.startTime + note.time
-            const poseEnd = poseStart + performance.poseDuration
+            const poseDuration =
+              characterAction.duration === 'untilKeyUp'
+                ? performance.poseDuration
+                : characterAction.duration
+            const poseEnd = poseStart + poseDuration
             if (playbackTime < poseStart || playbackTime >= poseEnd) return
 
             const poseKey = `${turn.character}:${turn.startTime}:${noteIndex}`
             currentCpuPoses.add(poseKey)
             if (!activeCpuPoses.has(poseKey)) {
-              charactersBySlot
-                .get(turn.character)
-                ?.visual.playState(
-                  'leftArm',
-                  'up',
+              const character = charactersBySlot.get(turn.character)
+              if (character) {
+                playCharacterAction(
+                  character.visual,
+                  characterAction,
                   poseEnd - playbackTime,
                 )
+              }
             }
           })
         })

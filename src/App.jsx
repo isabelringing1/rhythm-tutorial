@@ -41,6 +41,18 @@ const PLAYER_MEASURE = 3
 const TURN_LEAD_IN = 0.35
 const gameFlowReducer = createGameFlowReducer(GAME_CONFIG)
 
+function getInstrumentSound(instrument, eventType) {
+  if (eventType === 'press') return instrument.keyPressSound
+  if (eventType === 'down') return instrument.keyDownSound
+  return instrument.keyUpSound
+}
+
+function getInstrumentSoundPaths(instrument) {
+  return instrument.inputMode === 'keyPress'
+    ? [instrument.keyPressSound]
+    : [instrument.keyDownSound, instrument.keyUpSound]
+}
+
 function loadPlayerDelay() {
   const savedDelay = Number(localStorage.getItem(PLAYER_DELAY_STORAGE_KEY))
   return Number.isFinite(savedDelay) ? savedDelay : 0
@@ -83,22 +95,106 @@ function App() {
   )
 
   useEffect(() => {
-    const isMusicSection = GAME_CONFIG.steps[gameState.stepIndex]?.type === 'play'
+    const stepType = GAME_CONFIG.steps[gameState.stepIndex]?.type
+    const isInstrumentStep = stepType === 'play' || stepType === 'try'
     if (
-      !isMusicSection &&
+      !isInstrumentStep &&
       calibrationStatus !== 'calibrating'
     ) {
       return undefined
     }
 
-    function handleKeyDown(event) {
-      if (event.repeat) return
-      if (
+    function isFormInput(event) {
+      return (
         event.target instanceof HTMLElement &&
         event.target.matches('button, input, select, textarea')
-      ) {
+      )
+    }
+
+    function handleInstrumentInput(event) {
+      if (isPaused || isFormInput(event)) return
+
+      const step = GAME_CONFIG.steps[gameState.stepIndex]
+      const { instrument } = step
+      if (event.code !== instrument.keyBinding) return
+
+      let inputEventType
+      if (instrument.inputMode === 'keyPress') {
+        if (event.type !== 'keydown') return
+        inputEventType = 'press'
+      } else {
+        inputEventType = event.type === 'keydown' ? 'down' : 'up'
+      }
+
+      event.preventDefault()
+      void audioEngine.playSound(
+        getInstrumentSound(instrument, inputEventType),
+      )
+
+      if (step.type === 'try') {
+        dispatch({
+          type: 'TRY_NOTE',
+          feedback: {
+            id: event.timeStamp,
+            inputEventType,
+            noteIndex: null,
+            rating: 'perfect',
+          },
+        })
         return
       }
+
+      const transition = transitionRef.current
+      const playbackTime = audioEngine.getPlaybackTime({
+        calibrationOffset:
+          step.timing.calibrationOffset - playerDelay / 1000,
+      })
+      const isPlayerWindow =
+        transition !== null &&
+        playbackTime !== null &&
+        playbackTime >= transition.playerStart - timing.goodWindow &&
+        playbackTime < transition.playerEnd
+
+      if (!isPlayerWindow) {
+        dispatch({
+          type: 'FEEDBACK',
+          feedback: {
+            id: event.timeStamp,
+            inputEventType,
+            noteIndex: null,
+            rating: 'miss',
+            timingError: Number.POSITIVE_INFINITY,
+            timingOffset: null,
+          },
+        })
+        return
+      }
+
+      const tapTime = playbackTime - transition.playerStart
+      const result = judgeChartTap(
+        tapTime,
+        transition.notes,
+        attemptRef.current,
+        {
+          perfectWindow: timing.perfectWindow,
+          goodWindow: timing.goodWindow,
+        },
+        inputEventType,
+      )
+      attemptRef.current = result.attempt
+      dispatch({
+        type: 'FEEDBACK',
+        feedback: {
+          ...result.judgment,
+          id: event.timeStamp,
+          inputEventType,
+        },
+      })
+    }
+
+    function handleKeyDown(event) {
+      if (event.repeat) return
+      if (isFormInput(event)) return
 
       if (calibrationStatus === 'calibrating') {
         if (event.code !== 'Space') return
@@ -123,59 +219,20 @@ function App() {
         return
       }
 
-      if (isPaused) return
-      if (event.code !== 'KeyJ') return
-      event.preventDefault()
-      const step = GAME_CONFIG.steps[gameState.stepIndex]
-      void audioEngine.playSound(step.hitSound)
+      handleInstrumentInput(event)
+    }
 
-      const transition = transitionRef.current
-      const playbackTime = audioEngine.getPlaybackTime({
-        calibrationOffset:
-          step.timing.calibrationOffset - playerDelay / 1000,
-      })
-      const isPlayerWindow =
-        transition !== null &&
-        playbackTime !== null &&
-        playbackTime >= transition.playerStart - timing.goodWindow &&
-        playbackTime < transition.playerEnd
-
-      if (!isPlayerWindow) {
-        dispatch({
-          type: 'FEEDBACK',
-          feedback: {
-            id: event.timeStamp,
-            noteIndex: null,
-            rating: 'miss',
-            timingError: Number.POSITIVE_INFINITY,
-            timingOffset: null,
-          },
-        })
-        return
-      }
-
-      const tapTime = playbackTime - transition.playerStart
-      const result = judgeChartTap(
-        tapTime,
-        transition.noteTimes,
-        attemptRef.current,
-        {
-          perfectWindow: timing.perfectWindow,
-          goodWindow: timing.goodWindow,
-        },
-      )
-      attemptRef.current = result.attempt
-      dispatch({
-        type: 'FEEDBACK',
-        feedback: {
-          ...result.judgment,
-          id: event.timeStamp,
-        },
-      })
+    function handleKeyUp(event) {
+      if (calibrationStatus === 'calibrating') return
+      handleInstrumentInput(event)
     }
 
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
   }, [
     audioEngine,
     calibrationStatus,
@@ -276,6 +333,38 @@ function App() {
   }, [audioEngine, isPaused, playerDelay, timing.goodWindow])
 
   useEffect(() => {
+    if (gameState.mode !== 'try') return
+    let cancelled = false
+    const step = GAME_CONFIG.steps[gameState.stepIndex]
+
+    void audioEngine
+      .preload(getInstrumentSoundPaths(step.instrument))
+      .catch((error) => {
+        if (cancelled) return
+        console.error(error)
+        dispatch({
+          type: 'FAIL',
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Unable to load the instrument',
+        })
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [audioEngine, gameState.mode, gameState.stepIndex])
+
+  useEffect(() => {
+    if (gameState.mode !== 'try' || gameState.remainingNotes !== 0) return
+    const timeout = window.setTimeout(() => {
+      dispatch({ type: 'TRY_COMPLETE' })
+    }, 0)
+    return () => window.clearTimeout(timeout)
+  }, [gameState.mode, gameState.remainingNotes])
+
+  useEffect(() => {
     if (gameState.mode !== 'loadingPlay') return
     const attemptKey = `${gameState.stepIndex}:${gameState.attemptNumber}`
     if (lastStartedAttemptRef.current === attemptKey) return
@@ -287,7 +376,10 @@ function App() {
       try {
         if (activeTrackStepRef.current !== gameState.stepIndex) {
           audioEngine.stopTrack()
-          await audioEngine.preload([step.backingTrack, step.hitSound])
+          await audioEngine.preload([
+            step.backingTrack,
+            ...getInstrumentSoundPaths(step.instrument),
+          ])
           await audioEngine.startTrack(step.backingTrack, { loop: true })
           activeTrackStepRef.current = gameState.stepIndex
         }
@@ -317,6 +409,7 @@ function App() {
         const playerEnd = playerStart + step.chart.duration
         const performanceData = {
           cpuTurns,
+          instrument: step.instrument,
           notes: step.chart.notes,
           playerStart,
           playerEnd,
@@ -327,7 +420,7 @@ function App() {
           cpuTurns.flatMap((turn) =>
             step.chart.notes.map((note) =>
               audioEngine.scheduleSound(
-                step.hitSound,
+                getInstrumentSound(step.instrument, note.eventType),
                 turn.startTime + note.time,
               ),
             ),
@@ -341,6 +434,7 @@ function App() {
           playerEnd,
           noteCount: step.chart.notes.length,
           noteTimes: step.chart.notes.map((note) => note.time),
+          notes: step.chart.notes,
         }
         attemptRef.current = createAttempt(step.chart.notes.length)
         dispatch({ type: 'PLAY_READY', performance: performanceData })
@@ -385,7 +479,11 @@ function App() {
   ])
 
   useEffect(() => {
-    if (gameState.mode === 'dialogue' || gameState.mode === 'complete') {
+    if (
+      gameState.mode === 'dialogue' ||
+      gameState.mode === 'try' ||
+      gameState.mode === 'complete'
+    ) {
       audioEngine.stopTrack()
       activeTrackStepRef.current = null
       transitionRef.current = null
@@ -463,7 +561,7 @@ function App() {
       ? (activeStep.lineToCharacterState?.[gameState.dialogueLine] ?? null)
       : null
   const stickyDialogueText =
-    activeStep?.type === 'play' &&
+    (activeStep?.type === 'play' || activeStep?.type === 'try') &&
     previousStep?.type === 'dialogue' &&
     previousStep.lastLineStick
       ? previousStep.lines.findLast(
