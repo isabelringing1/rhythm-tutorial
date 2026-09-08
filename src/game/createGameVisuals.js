@@ -10,6 +10,7 @@ const TOTAL_SLOT_COUNT = 4
 const PLAYER_SLOT = 3
 const MAD_DURATION = 0.75
 const HAPPY_DURATION = 1
+const DEFAULT_TURN_END_ACTION_DURATION = 0.25
 const SMOOTH_TEXTURE_OPTIONS = {
   autoGenerateMipmaps: true,
   scaleMode: 'linear',
@@ -27,7 +28,12 @@ function playCharacterAction(visual, action, duration = action.duration) {
     visual.setState(action.category, action.state)
     return
   }
-  visual.playState(action.category, action.state, duration)
+  const resolvedDuration =
+    action.duration === 'untilTurnEnd' &&
+    (!Number.isFinite(duration) || duration <= 0)
+      ? DEFAULT_TURN_END_ACTION_DURATION
+      : duration
+  visual.playState(action.category, action.state, resolvedDuration)
 }
 
 export async function createGameVisuals(
@@ -103,9 +109,21 @@ export async function createGameVisuals(
         .find((instrument) => instrument.id === feedback.instrumentId)
         ?.characterActions[feedback.inputEventType]
     if (characterAction) {
+      const playbackTime = audioEngine.getPlaybackTime()
+      const isPlayerTurn =
+        playbackTime !== null &&
+        Number.isFinite(performance?.playerStart) &&
+        Number.isFinite(performance?.playerEnd) &&
+        playbackTime >= performance.playerStart &&
+        playbackTime < performance.playerEnd
+      const duration =
+        characterAction.duration === 'untilTurnEnd' && isPlayerTurn
+          ? performance.playerEnd - playbackTime
+          : characterAction.duration
       playCharacterAction(
         charactersBySlot.get(PLAYER_SLOT).visual,
         characterAction,
+        duration,
       )
     }
     if (feedback.rating !== 'perfect') {
@@ -163,6 +181,8 @@ export async function createGameVisuals(
             const poseDuration =
               characterAction.duration === 'untilKeyUp'
                 ? performance.poseDuration
+                : characterAction.duration === 'untilTurnEnd'
+                  ? turn.endTime - poseStart
                 : characterAction.duration
             const poseEnd = poseStart + poseDuration
             if (playbackTime < poseStart || playbackTime >= poseEnd) return

@@ -64,7 +64,7 @@ const rawGameConfig = {
         '...Oh, you thought we were starting now? Sorry, there\'s more.',
         '[{pen}=true]',
         'Look! You have a pen. One of those clicky ones, too.',
-        'Press and release K to click the pen. Here, try it out a bit.',
+        'Press and release K to click the pen. Here, try it out.',
       ],
       lineToCharacterState: {
         3: [[2, 'face', 'lookRight']],
@@ -80,8 +80,9 @@ const rawGameConfig = {
       type: 'dialogue',
       lines: [
         'Okay, okay!',
-        'Let\'s practice with the pen in line now.',
-      ]
+        'Let\'s practice in line now.',
+      ],
+      lastLineStick: true,
     },
     {
       type: 'play',
@@ -101,8 +102,9 @@ const rawGameConfig = {
     {
       type: 'dialogue',
       lines: [
-        'Good. But can you handle playing both instruments at once?'
-      ]
+        'Good. Seems like you have it down.',
+        'But can you handle doing two things at once?',
+      ],
     },
     {
       type: 'play',
@@ -112,18 +114,27 @@ const rawGameConfig = {
       patterns: [
         {
           instrumentId: 'bell',
-          pattern: 'x..x .... .... ....',
+          pattern: '.... x.x. .... x...',
         },
         {
           instrumentId: 'pen',
-          pattern: '.... .... d... u...',
+          pattern: 'd... .... u... ....',
         },
       ],
       backingTrack: '/audio/bottle.mp3',
       requiredSuccesses: 3,
       poseDuration: 0.12,
     },
+    {
+      type: 'dialogue',
+      lines: [
+        'Phew, nice work!',
+        'Let\'s practice with the pen in line now.',
+      ],
+      lastLineStick: true,
+    },
   ],
+  
 }
 
 export const GAME_CONFIG = compileGameConfig(rawGameConfig, INSTRUMENTS)

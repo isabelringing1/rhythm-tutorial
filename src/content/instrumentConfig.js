@@ -1,4 +1,5 @@
 const INPUT_MODES = new Set(['keyPress', 'keyDownUp'])
+const ACTION_DURATION_MODES = new Set(['untilKeyUp', 'untilTurnEnd'])
 
 function requireSoundPath(instrument, field) {
   if (typeof instrument[field] !== 'string' || instrument[field] === '') {
@@ -23,7 +24,7 @@ function compileCharacterActions(instrument) {
       action.category === '' ||
       typeof action.state !== 'string' ||
       action.state === '' ||
-      (action.duration !== 'untilKeyUp' &&
+      (!ACTION_DURATION_MODES.has(action.duration) &&
         (!Number.isFinite(action.duration) || action.duration <= 0))
     ) {
       throw new Error(
@@ -105,7 +106,7 @@ export const INSTRUMENTS = compileInstrumentConfig([
     id: 'pen',
     keyBinding: 'KeyK',
     inputMode: 'keyDownUp',
-    keyDownSound: '/audio/pen_down.wav',
+    keyDownSound: '/audio/pen_down1.mp3',
     keyUpSound: '/audio/pen_up.wav',
     characterActions: {
       down: {
@@ -116,7 +117,7 @@ export const INSTRUMENTS = compileInstrumentConfig([
       up: {
         category: 'rightArm',
         state: 'upReleased',
-        duration: 0.25,
+        duration: 'untilTurnEnd',
       },
     },
   },

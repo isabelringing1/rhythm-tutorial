@@ -121,6 +121,28 @@ function skipStep(state, config) {
   return enterStep(nextState, config, state.stepIndex + 1)
 }
 
+function goToStep(config, stepIndex) {
+  if (
+    !Number.isInteger(stepIndex) ||
+    stepIndex < 0 ||
+    stepIndex >= config.steps.length
+  ) {
+    return null
+  }
+
+  let nextState = { ...initialGameState }
+  config.steps.slice(0, stepIndex).forEach((step) => {
+    if (step.type === 'flag') {
+      nextState = applyFlag(nextState, step)
+    } else if (step.type === 'dialogue') {
+      Object.values(step.lineFlags).forEach((flag) => {
+        nextState = applyFlag(nextState, flag)
+      })
+    }
+  })
+  return enterStep(nextState, config, stepIndex)
+}
+
 export function createGameFlowReducer(config) {
   return function gameFlowReducer(state, action) {
     switch (action.type) {
@@ -185,6 +207,8 @@ export function createGameFlowReducer(config) {
         return enterStep(state, config, state.stepIndex + 1)
       case 'SKIP_STEP':
         return skipStep(state, config)
+      case 'GOTO_STEP':
+        return goToStep(config, action.stepIndex) ?? state
       case 'FAIL':
         return {
           ...initialGameState,

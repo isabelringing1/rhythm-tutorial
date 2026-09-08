@@ -60,8 +60,9 @@ function logOffBeatTiming(judgment) {
   ) {
     return
   }
+  const direction = judgment.timingOffset < 0 ? 'early' : 'late'
   console.log(
-    `note off by ${Math.abs(judgment.timingOffset * 1000).toFixed(1)}ms`,
+    `${direction} by ${Math.abs(judgment.timingOffset * 1000).toFixed(1)}ms`,
   )
 }
 
@@ -576,6 +577,24 @@ function App() {
     dispatch({ type: 'SKIP_STEP' })
   }
 
+  function handleGoToStep(stepNumber) {
+    if (
+      !Number.isInteger(stepNumber) ||
+      stepNumber < 1 ||
+      stepNumber > GAME_CONFIG.steps.length
+    ) {
+      return
+    }
+
+    audioEngine.stop()
+    activeTrackStepRef.current = null
+    lastStartedAttemptRef.current = null
+    transitionRef.current = null
+    nextAttemptStartRef.current = null
+    setIsPaused(false)
+    dispatch({ type: 'GOTO_STEP', stepIndex: stepNumber - 1 })
+  }
+
   const activeStep = GAME_CONFIG.steps[gameState.stepIndex]
   const previousStep = GAME_CONFIG.steps
     .slice(0, gameState.stepIndex)
@@ -671,7 +690,12 @@ function App() {
             {activeStep?.type === 'play' && (
               <RhythmPreview patterns={activeStep.patterns} />
             )}
-            <DebugMenu onSkip={handleSkipStep} />
+            <DebugMenu
+              currentStep={gameState.stepIndex + 1}
+              onGoToStep={handleGoToStep}
+              onSkip={handleSkipStep}
+              totalSteps={GAME_CONFIG.steps.length}
+            />
           </div>
         )}
       <TimingDebug
