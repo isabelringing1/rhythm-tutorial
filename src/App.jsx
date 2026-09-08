@@ -171,7 +171,8 @@ function App() {
       const isPlayerWindow =
         transition !== null &&
         playbackTime !== null &&
-        playbackTime >= transition.playerStart - timing.goodWindow &&
+        playbackTime >=
+          transition.playerStart - instrument.timing.goodWindow &&
         playbackTime < transition.playerEnd
 
       if (!isPlayerWindow) {
@@ -195,10 +196,7 @@ function App() {
         tapTime,
         transition.notes,
         attemptRef.current,
-        {
-          perfectWindow: timing.perfectWindow,
-          goodWindow: timing.goodWindow,
-        },
+        instrument.timing,
         inputEventType,
         instrument.id,
       )
@@ -265,8 +263,6 @@ function App() {
     gameState.stepIndex,
     isPaused,
     playerDelay,
-    timing.goodWindow,
-    timing.perfectWindow,
   ])
 
   useEffect(() => {
@@ -299,9 +295,8 @@ function App() {
           if (judgedPlaybackTime !== null) {
             const expiration = expireMissedNotes(
               judgedPlaybackTime - transition.playerStart,
-              transition.noteTimes,
+              transition.notes,
               attemptRef.current,
-              timing.goodWindow,
             )
             attemptRef.current = expiration.attempt
             if (expiration.missedNoteIndexes.length > 0) {
@@ -318,9 +313,8 @@ function App() {
           if (playbackTime >= transition.playerEnd) {
             const finalExpiration = expireMissedNotes(
               Number.POSITIVE_INFINITY,
-              transition.noteTimes,
+              transition.notes,
               attemptRef.current,
-              timing.goodWindow,
             )
             attemptRef.current = finalExpiration.attempt
             if (finalExpiration.missedNoteIndexes.length > 0) {
@@ -353,7 +347,7 @@ function App() {
 
     animationFrame = requestAnimationFrame(updateTurn)
     return () => cancelAnimationFrame(animationFrame)
-  }, [audioEngine, isPaused, playerDelay, timing.goodWindow])
+  }, [audioEngine, isPaused, playerDelay])
 
   useEffect(() => {
     if (gameState.mode !== 'try') return
@@ -458,7 +452,6 @@ function App() {
           playerStart,
           playerEnd,
           noteCount: step.chart.notes.length,
-          noteTimes: step.chart.notes.map((note) => note.time),
           notes: step.chart.notes,
         }
         attemptRef.current = createAttempt(step.chart.notes.length)

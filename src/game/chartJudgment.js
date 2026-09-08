@@ -73,14 +73,19 @@ export function judgeChartTap(
 
 export function expireMissedNotes(
   playbackTime,
-  noteTimes,
+  notes,
   attempt,
-  goodWindow,
+  defaultGoodWindow = Number.POSITIVE_INFINITY,
 ) {
   const judgments = [...attempt.judgments]
   const missedNoteIndexes = []
 
-  noteTimes.forEach((noteTime, index) => {
+  notes.forEach((note, index) => {
+    const noteTime = typeof note === 'number' ? note : note.time
+    const goodWindow =
+      typeof note === 'number'
+        ? defaultGoodWindow
+        : note.instrument.timing.goodWindow
     if (
       judgments[index] === null &&
       playbackTime > noteTime + goodWindow

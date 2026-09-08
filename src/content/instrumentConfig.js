@@ -7,6 +7,21 @@ function requireSoundPath(instrument, field) {
   }
 }
 
+function compileTiming(instrument) {
+  const timing = instrument.timing
+  if (
+    !timing ||
+    !Number.isFinite(timing.perfectWindow) ||
+    !Number.isFinite(timing.goodWindow) ||
+    timing.perfectWindow < 0 ||
+    timing.goodWindow < timing.perfectWindow
+  ) {
+    throw new Error(`instrument "${instrument.id}" has invalid timing windows`)
+  }
+
+  return Object.freeze({ ...timing })
+}
+
 function compileCharacterActions(instrument) {
   const requiredEvents =
     instrument.inputMode === 'keyPress' ? ['press'] : ['down', 'up']
@@ -81,6 +96,7 @@ export function compileInstrumentConfig(instruments) {
 
     return Object.freeze({
       ...instrument,
+      timing: compileTiming(instrument),
       characterActions: compileCharacterActions(instrument),
     })
   })
@@ -94,6 +110,10 @@ export const INSTRUMENTS = compileInstrumentConfig([
     keyBinding: 'KeyJ',
     inputMode: 'keyPress',
     keyPressSound: '/audio/bell.wav',
+    timing: {
+      perfectWindow: 0.06,
+      goodWindow: 0.14,
+    },
     characterActions: {
       press: {
         category: 'leftArm',
@@ -108,6 +128,10 @@ export const INSTRUMENTS = compileInstrumentConfig([
     inputMode: 'keyDownUp',
     keyDownSound: '/audio/pen_down1.mp3',
     keyUpSound: '/audio/pen_up.wav',
+    timing: {
+      perfectWindow: 0.1,
+      goodWindow: 0.14,
+    },
     characterActions: {
       down: {
         category: 'rightArm',

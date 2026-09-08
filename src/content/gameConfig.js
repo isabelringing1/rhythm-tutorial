@@ -5,8 +5,6 @@ const rawGameConfig = {
   defaults: {
     timing: {
       calibrationOffset: 0,
-      perfectWindow: 0.06,
-      goodWindow: 0.14,
     },
   },
   steps: [
@@ -14,7 +12,21 @@ const rawGameConfig = {
       type: 'dialogue',
       lines: [
         'Hey there. You’re about to play an amazing rhythm game. Everyone’s been raving about it!',
-        'You should practice first. Don\'t worry, it won\'t take long.',
+        'First, you should learn the ropes. Don\'t worry, it won\'t take long.',
+        'Press J to ring the bell. Try it out for a bit!',
+      ],
+      lastLineStick: true,
+    },
+    {
+      type: 'try',
+      instrumentId: 'bell',
+      numNotes: 5,
+    },
+    {
+      type: 'dialogue',
+      lines: [
+        'Okay, okay!',
+        'Next, let\'s try it with the others.',
         'Press J to ring the bell when it’s your turn in line.',
       ],
       lastLineStick: true,
@@ -38,7 +50,7 @@ const rawGameConfig = {
       type: 'dialogue',
       lines: [
         'Nice. Sometimes, the pattern might change.',
-        'Let\'s try again with a harder rhythm.',
+        'Let\'s try a harder rhythm.',
       ],
       lastLineStick: true,
     },
@@ -79,7 +91,7 @@ const rawGameConfig = {
     {
       type: 'dialogue',
       lines: [
-        'Okay, okay!',
+        'You\'re a natural.',
         'Let\'s practice in line now.',
       ],
       lastLineStick: true,
@@ -102,7 +114,7 @@ const rawGameConfig = {
     {
       type: 'dialogue',
       lines: [
-        'Good. Seems like you have it down.',
+        'Good.',
         'But can you handle doing two things at once?',
       ],
     },
@@ -128,7 +140,7 @@ const rawGameConfig = {
     {
       type: 'dialogue',
       lines: [
-        'Phew, nice work!',
+        'Phew!',
         'Let\'s practice with the pen in line now.',
       ],
       lastLineStick: true,

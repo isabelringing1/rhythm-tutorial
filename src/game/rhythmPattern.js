@@ -252,15 +252,6 @@ function validatePlayStep(step, index, defaults, instrumentsById) {
       `step ${index + 1}: instrumentId and pattern must be defined inside patterns`,
     )
   }
-  if (
-    !Number.isFinite(timing.perfectWindow) ||
-    !Number.isFinite(timing.goodWindow) ||
-    timing.perfectWindow < 0 ||
-    timing.goodWindow < timing.perfectWindow
-  ) {
-    throw new Error(`step ${index + 1}: timing windows are invalid`)
-  }
-
   const instrumentIds = new Set()
   const keyBindings = new Set()
   const patterns = step.patterns.map((patternConfig) => {
@@ -331,8 +322,6 @@ export function compileGameConfig(config, instruments) {
   const defaults = {
     timing: {
       calibrationOffset: 0,
-      perfectWindow: 0.06,
-      goodWindow: 0.14,
       ...config.defaults?.timing,
     },
   }
