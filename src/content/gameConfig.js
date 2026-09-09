@@ -141,9 +141,41 @@ const rawGameConfig = {
       type: 'dialogue',
       lines: [
         'Phew!',
-        'Let\'s practice with the pen in line now.',
+        'It\'s a bit of a handful, isn\'t it?',
+        'Well, good news- this next instrument doesn\'t require any hands at all!',
+        'You\'ll need to use the microphone for this one. Please allow permissions!',
+        '[{action}{request_mic}]',
+        'Try singing into the mic.'
       ],
       lastLineStick: true,
+    },
+    {
+      type: 'try',
+      instrumentId: 'voice',
+      numNotes: 3,
+    },
+    {
+      type: 'dialogue',
+      lines: [
+        'Lovely!',
+        'Sing along with the others now.'
+      ],
+      lastLineStick: true,
+    },
+    {
+      type: 'play',
+      bpm: 125,
+      beatsPerBar: 4,
+      stepsPerBeat: 4,
+      patterns: [
+        {
+          instrumentId: 'voice',
+          pattern: 'x... .... x... ....',
+        },
+      ],
+      backingTrack: '/audio/bottle.mp3',
+      requiredSuccesses: 3,
+      poseDuration: 0.12,
     },
   ],
   

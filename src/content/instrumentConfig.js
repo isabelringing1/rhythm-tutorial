@@ -1,4 +1,5 @@
 const INPUT_MODES = new Set(['keyPress', 'keyDownUp'])
+const INPUT_SOURCES = new Set(['keyboard', 'microphone'])
 const ACTION_DURATION_MODES = new Set(['untilKeyUp', 'untilTurnEnd'])
 
 function requireSoundPath(instrument, field) {
@@ -67,17 +68,32 @@ export function compileInstrumentConfig(instruments) {
     }
     ids.add(instrument.id)
 
+    const inputSource = instrument.inputSource ?? 'keyboard'
+    const inputMode =
+      instrument.inputMode ??
+      (inputSource === 'microphone' ? 'keyPress' : undefined)
+    if (!INPUT_SOURCES.has(inputSource)) {
+      throw new Error(`instrument "${instrument.id}" has an invalid input source`)
+    }
     if (
-      typeof instrument.keyBinding !== 'string' ||
-      instrument.keyBinding === ''
+      inputSource === 'keyboard' &&
+      (typeof instrument.keyBinding !== 'string' ||
+        instrument.keyBinding === '')
     ) {
       throw new Error(`instrument "${instrument.id}" requires keyBinding`)
     }
-    if (!INPUT_MODES.has(instrument.inputMode)) {
+    if (!INPUT_MODES.has(inputMode)) {
       throw new Error(`instrument "${instrument.id}" has an invalid inputMode`)
     }
+    if (inputSource === 'microphone' && inputMode !== 'keyPress') {
+      throw new Error(
+        `microphone instrument "${instrument.id}" must use keyPress input mode`,
+      )
+    }
 
-    if (instrument.inputMode === 'keyPress') {
+    if (inputSource === 'microphone') {
+      requireSoundPath(instrument, 'cpuSound')
+    } else if (inputMode === 'keyPress') {
       requireSoundPath(instrument, 'keyPressSound')
       if (instrument.keyDownSound || instrument.keyUpSound) {
         throw new Error(
@@ -96,8 +112,10 @@ export function compileInstrumentConfig(instruments) {
 
     return Object.freeze({
       ...instrument,
+      inputMode,
+      inputSource,
       timing: compileTiming(instrument),
-      characterActions: compileCharacterActions(instrument),
+      characterActions: compileCharacterActions({ ...instrument, inputMode }),
     })
   })
 
@@ -142,6 +160,28 @@ export const INSTRUMENTS = compileInstrumentConfig([
         category: 'rightArm',
         state: 'upReleased',
         duration: 'untilTurnEnd',
+      },
+    },
+  },
+  {
+    id: 'voice',
+    inputSource: 'microphone',
+    cpuSound: '/audio/sing.mp3',
+    timing: {
+      perfectWindow: 0.08,
+      goodWindow: 0.16,
+    },
+    microphone: {
+      minimumInterval: 0.1,
+      minimumRms: 0.025,
+      noiseFloorMultiplier: 3,
+      releaseRatio: 0.55,
+    },
+    characterActions: {
+      press: {
+        category: 'face',
+        state: 'sing',
+        duration: 0.4,
       },
     },
   },

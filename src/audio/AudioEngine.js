@@ -6,7 +6,7 @@ export class AudioEngine {
   oneShotSources = new Set()
 
   async preload(urls) {
-    const context = this.#getContext()
+    const context = this.getContext()
     if (context.state === 'suspended') {
       await context.resume()
     }
@@ -18,7 +18,7 @@ export class AudioEngine {
   }
 
   async startTrack(url, { loop = false, onEnded } = {}) {
-    const context = this.#getContext()
+    const context = this.getContext()
     if (context.state === 'suspended') {
       await context.resume()
     }
@@ -43,7 +43,7 @@ export class AudioEngine {
 
   async scheduleSound(url, playbackTime) {
     if (this.playbackStartedAt === null) return null
-    const context = this.#getContext()
+    const context = this.getContext()
     const buffer = await this.#loadBuffer(url)
     const source = context.createBufferSource()
     source.buffer = buffer
@@ -58,7 +58,7 @@ export class AudioEngine {
   }
 
   async playSound(url) {
-    const context = this.#getContext()
+    const context = this.getContext()
     if (context.state === 'suspended') {
       await context.resume()
     }
@@ -117,7 +117,21 @@ export class AudioEngine {
   }
 
   getPlaybackTime({ calibrationOffset = 0, compensateLatency = true } = {}) {
-    if (!this.context || this.playbackStartedAt === null) {
+    return this.getPlaybackTimeAt(this.context?.currentTime, {
+      calibrationOffset,
+      compensateLatency,
+    })
+  }
+
+  getPlaybackTimeAt(
+    contextTime,
+    { calibrationOffset = 0, compensateLatency = true } = {},
+  ) {
+    if (
+      !this.context ||
+      this.playbackStartedAt === null ||
+      !Number.isFinite(contextTime)
+    ) {
       return null
     }
 
@@ -126,14 +140,14 @@ export class AudioEngine {
       : 0
 
     return (
-      this.context.currentTime -
+      contextTime -
       this.playbackStartedAt -
       outputLatency +
       calibrationOffset
     )
   }
 
-  #getContext() {
+  getContext() {
     if (!this.context) {
       this.context = new AudioContext()
     }

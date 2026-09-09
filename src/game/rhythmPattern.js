@@ -1,5 +1,6 @@
 import {
   isValidFlagId,
+  parseInlineActionDirective,
   parseInlineFlagDirective,
 } from './flags.js'
 
@@ -115,6 +116,7 @@ function validateDialogueStep(step, index) {
     throw new Error(`step ${index + 1}: dialogue must contain at least one line`)
   }
   const lineFlags = {}
+  const lineActions = {}
   let visibleLineCount = 0
   step.lines.forEach((line, lineIndex) => {
     if (typeof line !== 'string' || line.trim() === '') {
@@ -124,11 +126,14 @@ function validateDialogueStep(step, index) {
     }
 
     const flag = parseInlineFlagDirective(line)
+    const action = parseInlineActionDirective(line)
     if (flag) {
       lineFlags[lineIndex] = flag
+    } else if (action) {
+      lineActions[lineIndex] = action
     } else if (line.startsWith('[{')) {
       throw new Error(
-        `step ${index + 1}: dialogue line ${lineIndex + 1} contains an invalid flag directive`,
+        `step ${index + 1}: dialogue line ${lineIndex + 1} contains an invalid directive`,
       )
     } else {
       visibleLineCount += 1
@@ -189,6 +194,7 @@ function validateDialogueStep(step, index) {
   })
 
   return {
+    lineActions: Object.freeze(lineActions),
     lineFlags: Object.freeze(lineFlags),
     lineToCharacterState: Object.freeze(normalizedCharacterStates),
   }
@@ -254,6 +260,7 @@ function validatePlayStep(step, index, defaults, instrumentsById) {
   }
   const instrumentIds = new Set()
   const keyBindings = new Set()
+  let hasMicrophoneInstrument = false
   const patterns = step.patterns.map((patternConfig) => {
     if (!patternConfig || typeof patternConfig !== 'object') {
       throw new Error(`step ${index + 1}: each pattern must be an object`)
@@ -268,13 +275,25 @@ function validatePlayStep(step, index, defaults, instrumentsById) {
         `step ${index + 1}: duplicate pattern for instrument "${instrument.id}"`,
       )
     }
-    if (keyBindings.has(instrument.keyBinding)) {
+    if (
+      instrument.inputSource === 'keyboard' &&
+      keyBindings.has(instrument.keyBinding)
+    ) {
       throw new Error(
         `step ${index + 1}: pattern instruments must use unique key bindings`,
       )
     }
+    if (instrument.inputSource === 'microphone' && hasMicrophoneInstrument) {
+      throw new Error(
+        `step ${index + 1}: only one microphone instrument can be used at a time`,
+      )
+    }
     instrumentIds.add(instrument.id)
-    keyBindings.add(instrument.keyBinding)
+    if (instrument.inputSource === 'keyboard') {
+      keyBindings.add(instrument.keyBinding)
+    } else {
+      hasMicrophoneInstrument = true
+    }
 
     const chart = parseRhythmPattern(patternConfig.pattern, {
       ...step,
@@ -331,13 +350,15 @@ export function compileGameConfig(config, instruments) {
 
   const steps = config.steps.map((step, index) => {
     if (step.type === 'dialogue') {
-      const { lineFlags, lineToCharacterState } = validateDialogueStep(
-        step,
-        index,
-      )
+      const {
+        lineActions,
+        lineFlags,
+        lineToCharacterState,
+      } = validateDialogueStep(step, index)
       return Object.freeze({
         ...step,
         lines: Object.freeze([...step.lines]),
+        lineActions,
         lineFlags,
         lineToCharacterState,
       })

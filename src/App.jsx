@@ -6,6 +6,7 @@ import {
   useState,
 } from 'react'
 import { AudioEngine } from './audio/AudioEngine.js'
+import { MeydaMicrophoneInput } from './audio/MeydaMicrophoneInput.js'
 import { GameCanvas } from './components/game/GameCanvas.jsx'
 import { DebugMenu } from './components/ui/DebugMenu.jsx'
 import { DialogueBox } from './components/ui/DialogueBox.jsx'
@@ -39,18 +40,39 @@ const CPU_COUNT = 2
 const FIRST_CPU_MEASURE = 1
 const PLAYER_MEASURE = 3
 const TURN_LEAD_IN = 0.35
+const STICKY_DIALOGUE_ADVANCE_DELAY_MS = 250
 const gameFlowReducer = createGameFlowReducer(GAME_CONFIG)
 
 function getInstrumentSound(instrument, eventType) {
+  if (instrument.inputSource === 'microphone') return instrument.cpuSound
   if (eventType === 'press') return instrument.keyPressSound
   if (eventType === 'down') return instrument.keyDownSound
   return instrument.keyUpSound
 }
 
 function getInstrumentSoundPaths(instrument) {
+  if (instrument.inputSource === 'microphone') {
+    return [instrument.cpuSound]
+  }
   return instrument.inputMode === 'keyPress'
     ? [instrument.keyPressSound]
     : [instrument.keyDownSound, instrument.keyUpSound]
+}
+
+function getMicrophoneInstrument(step) {
+  if (step?.type === 'try') {
+    return step.instrument.inputSource === 'microphone'
+      ? step.instrument
+      : null
+  }
+  if (step?.type === 'play') {
+    return (
+      step.patterns.find(
+        ({ instrument }) => instrument.inputSource === 'microphone',
+      )?.instrument ?? null
+    )
+  }
+  return null
 }
 
 function logOffBeatTiming(judgment) {
@@ -73,6 +95,9 @@ function loadPlayerDelay() {
 
 function App() {
   const [audioEngine] = useState(() => new AudioEngine())
+  const [microphoneInput] = useState(
+    () => new MeydaMicrophoneInput(audioEngine),
+  )
   const [gameState, dispatch] = useReducer(gameFlowReducer, initialGameState)
   const [calibrationStatus, setCalibrationStatus] = useState('idle')
   const [timing, setTiming] = useState(PRACTICE_TIMING)
@@ -83,11 +108,18 @@ function App() {
   const attemptRef = useRef(null)
   const transitionRef = useRef(null)
   const gameStateRef = useRef(gameState)
+  const instrumentEventHandlerRef = useRef(null)
   const activeTrackStepRef = useRef(null)
   const lastStartedAttemptRef = useRef(null)
   const nextAttemptStartRef = useRef(null)
 
-  useEffect(() => () => audioEngine.destroy(), [audioEngine])
+  useEffect(
+    () => () => {
+      microphoneInput.destroy()
+      audioEngine.destroy()
+    },
+    [audioEngine, microphoneInput],
+  )
   useEffect(() => {
     gameStateRef.current = gameState
   }, [gameState])
@@ -105,6 +137,102 @@ function App() {
       setCalibrationStatus('idle')
     },
     [audioEngine],
+  )
+
+  const handleInstrumentEvent = useCallback(
+    (instrument, inputEventType, eventId, contextTime = null) => {
+      if (isPaused) return
+
+      const step = GAME_CONFIG.steps[gameState.stepIndex]
+      if (step.type === 'try') {
+        dispatch({
+          type: 'TRY_NOTE',
+          feedback: {
+            id: eventId,
+            inputEventType,
+            instrumentId: instrument.id,
+            noteIndex: null,
+            rating: 'perfect',
+          },
+        })
+        return
+      }
+
+      const transition = transitionRef.current
+      const playbackTime =
+        contextTime === null
+          ? audioEngine.getPlaybackTime({
+              calibrationOffset:
+                step.timing.calibrationOffset - playerDelay / 1000,
+            })
+          : audioEngine.getPlaybackTimeAt(contextTime, {
+              calibrationOffset:
+                step.timing.calibrationOffset - playerDelay / 1000,
+            })
+      const isPlayerWindow =
+        transition !== null &&
+        playbackTime !== null &&
+        playbackTime >=
+          transition.playerStart - instrument.timing.goodWindow &&
+        playbackTime < transition.playerEnd
+
+      if (!isPlayerWindow) {
+        dispatch({
+          type: 'FEEDBACK',
+          feedback: {
+            id: eventId,
+            inputEventType,
+            instrumentId: instrument.id,
+            noteIndex: null,
+            rating: 'miss',
+            timingError: Number.POSITIVE_INFINITY,
+            timingOffset: null,
+          },
+        })
+        return
+      }
+
+      const tapTime = playbackTime - transition.playerStart
+      const result = judgeChartTap(
+        tapTime,
+        transition.notes,
+        attemptRef.current,
+        instrument.timing,
+        inputEventType,
+        instrument.id,
+      )
+      logOffBeatTiming(result.judgment)
+      attemptRef.current = result.attempt
+      dispatch({
+        type: 'FEEDBACK',
+        feedback: {
+          ...result.judgment,
+          id: eventId,
+          inputEventType,
+          instrumentId: instrument.id,
+        },
+      })
+    },
+    [audioEngine, gameState.stepIndex, isPaused, playerDelay],
+  )
+  instrumentEventHandlerRef.current = handleInstrumentEvent
+
+  const startMicrophone = useCallback(
+    (instrument) =>
+      microphoneInput.start({
+        options: instrument.microphone,
+        onSound: ({ contextTime }) => {
+          const mode = gameStateRef.current.mode
+          if (mode !== 'try' && mode !== 'playerTurn') return
+          instrumentEventHandlerRef.current?.(
+            instrument,
+            'press',
+            `microphone-${contextTime}`,
+            contextTime,
+          )
+        },
+      }),
+    [microphoneInput],
   )
 
   useEffect(() => {
@@ -148,69 +276,11 @@ function App() {
       void audioEngine.playSound(
         getInstrumentSound(instrument, inputEventType),
       )
-
-      if (step.type === 'try') {
-        dispatch({
-          type: 'TRY_NOTE',
-          feedback: {
-            id: event.timeStamp,
-            inputEventType,
-            instrumentId: instrument.id,
-            noteIndex: null,
-            rating: 'perfect',
-          },
-        })
-        return
-      }
-
-      const transition = transitionRef.current
-      const playbackTime = audioEngine.getPlaybackTime({
-        calibrationOffset:
-          step.timing.calibrationOffset - playerDelay / 1000,
-      })
-      const isPlayerWindow =
-        transition !== null &&
-        playbackTime !== null &&
-        playbackTime >=
-          transition.playerStart - instrument.timing.goodWindow &&
-        playbackTime < transition.playerEnd
-
-      if (!isPlayerWindow) {
-        dispatch({
-          type: 'FEEDBACK',
-          feedback: {
-            id: event.timeStamp,
-            inputEventType,
-            instrumentId: instrument.id,
-            noteIndex: null,
-            rating: 'miss',
-            timingError: Number.POSITIVE_INFINITY,
-            timingOffset: null,
-          },
-        })
-        return
-      }
-
-      const tapTime = playbackTime - transition.playerStart
-      const result = judgeChartTap(
-        tapTime,
-        transition.notes,
-        attemptRef.current,
-        instrument.timing,
+      handleInstrumentEvent(
+        instrument,
         inputEventType,
-        instrument.id,
+        event.timeStamp,
       )
-      logOffBeatTiming(result.judgment)
-      attemptRef.current = result.attempt
-      dispatch({
-        type: 'FEEDBACK',
-        feedback: {
-          ...result.judgment,
-          id: event.timeStamp,
-          inputEventType,
-          instrumentId: instrument.id,
-        },
-      })
     }
 
     function handleKeyDown(event) {
@@ -261,8 +331,34 @@ function App() {
     gameState.mode,
     gameState.playerTurn,
     gameState.stepIndex,
+    handleInstrumentEvent,
     isPaused,
-    playerDelay,
+  ])
+
+  useEffect(() => {
+    const step = GAME_CONFIG.steps[gameState.stepIndex]
+    const microphoneInstrument = getMicrophoneInstrument(step)
+    if (!microphoneInstrument) {
+      microphoneInput.stop()
+      return
+    }
+    if (gameState.mode !== 'try') return
+
+    void startMicrophone(microphoneInstrument).catch((error) => {
+      console.error(error)
+      dispatch({
+        type: 'FAIL',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Unable to start microphone input',
+      })
+    })
+  }, [
+    gameState.mode,
+    gameState.stepIndex,
+    microphoneInput,
+    startMicrophone,
   ])
 
   useEffect(() => {
@@ -391,6 +487,12 @@ function App() {
     async function prepareAttempt() {
       const step = GAME_CONFIG.steps[gameState.stepIndex]
       try {
+        const microphoneInstrument = getMicrophoneInstrument(step)
+        if (microphoneInstrument) {
+          await startMicrophone(microphoneInstrument)
+        }
+        if (cancelled) return
+
         if (activeTrackStepRef.current !== gameState.stepIndex) {
           audioEngine.stopTrack()
           await audioEngine.preload([
@@ -475,6 +577,7 @@ function App() {
     gameState.attemptNumber,
     gameState.mode,
     gameState.stepIndex,
+    startMicrophone,
     timing.beatOffset,
   ])
 
@@ -517,6 +620,10 @@ function App() {
 
   function handleAdvanceDialogue() {
     void audioEngine.playSound(DIALOGUE_CLICK_SOUND).catch(console.error)
+    dispatch({ type: 'NEXT_DIALOGUE' })
+  }
+
+  function handleSilentDialogueAdvance() {
     dispatch({ type: 'NEXT_DIALOGUE' })
   }
 
@@ -589,6 +696,63 @@ function App() {
   }
 
   const activeStep = GAME_CONFIG.steps[gameState.stepIndex]
+  const activeDialogueAction =
+    gameState.mode === 'dialogue'
+      ? activeStep.lineActions?.[gameState.dialogueLine]
+      : null
+  const lastVisibleDialogueLine =
+    activeStep?.type === 'dialogue'
+      ? activeStep.lines.findLastIndex(
+          (_, lineIndex) =>
+            !activeStep.lineFlags[lineIndex] &&
+            !activeStep.lineActions[lineIndex],
+        )
+      : -1
+  const shouldAutoAdvanceDialogue =
+    gameState.mode === 'dialogue' &&
+    activeStep.lastLineStick &&
+    gameState.dialogueLine === lastVisibleDialogueLine
+  const actionStickyDialogueText =
+    gameState.mode === 'dialogue' &&
+    activeDialogueAction &&
+    activeStep.lastLineStick &&
+    lastVisibleDialogueLine < gameState.dialogueLine
+      ? activeStep.lines[lastVisibleDialogueLine]
+      : null
+
+  useEffect(() => {
+    if (!activeDialogueAction) return undefined
+
+    let cancelled = false
+    async function performAction() {
+      try {
+        if (activeDialogueAction === 'request_mic') {
+          await microphoneInput.start({ onSound: null })
+        } else {
+          throw new Error(`Unknown dialogue action "${activeDialogueAction}"`)
+        }
+        if (!cancelled) {
+          dispatch({ type: 'NEXT_DIALOGUE' })
+        }
+      } catch (error) {
+        if (cancelled) return
+        console.error(error)
+        dispatch({
+          type: 'FAIL',
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Unable to perform dialogue action',
+        })
+      }
+    }
+
+    void performAction()
+    return () => {
+      cancelled = true
+    }
+  }, [activeDialogueAction, microphoneInput])
+
   const previousStep = GAME_CONFIG.steps
     .slice(0, gameState.stepIndex)
     .findLast((step) => step.type !== 'flag')
@@ -601,7 +765,9 @@ function App() {
     previousStep?.type === 'dialogue' &&
     previousStep.lastLineStick
       ? previousStep.lines.findLast(
-          (_, lineIndex) => !previousStep.lineFlags[lineIndex],
+          (_, lineIndex) =>
+            !previousStep.lineFlags[lineIndex] &&
+            !previousStep.lineActions[lineIndex],
         )
       : null
   const isPlaying =
@@ -640,11 +806,23 @@ function App() {
           showStart={gameState.mode === 'menu'}
         />
       )}
-      {gameState.mode === 'dialogue' && (
+      {gameState.mode === 'dialogue' && !activeDialogueAction && (
         <DialogueBox
           text={activeStep.lines[gameState.dialogueLine]}
-          onAdvance={handleAdvanceDialogue}
+          onAdvance={
+            shouldAutoAdvanceDialogue
+              ? handleSilentDialogueAdvance
+              : handleAdvanceDialogue
+          }
+          autoAdvanceDelayMs={
+            shouldAutoAdvanceDialogue
+              ? STICKY_DIALOGUE_ADVANCE_DELAY_MS
+              : null
+          }
         />
+      )}
+      {actionStickyDialogueText && (
+        <DialogueBox text={actionStickyDialogueText} isPersistent />
       )}
       {stickyDialogueText && (
         <DialogueBox text={stickyDialogueText} isPersistent />

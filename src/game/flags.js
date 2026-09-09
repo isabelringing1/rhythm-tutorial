@@ -1,6 +1,8 @@
 const FLAG_ID_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/
 const INLINE_FLAG_PATTERN =
   /^\[\{([A-Za-z_][A-Za-z0-9_-]*)\}=(true|false)\]$/
+const INLINE_ACTION_PATTERN =
+  /^\[\{action\}\{([A-Za-z_][A-Za-z0-9_-]*)\}\]$/
 
 export function isValidFlagId(id) {
   return typeof id === 'string' && FLAG_ID_PATTERN.test(id)
@@ -16,6 +18,13 @@ export function parseInlineFlagDirective(line) {
     id: match[1],
     value: match[2] === 'true',
   })
+}
+
+export function parseInlineActionDirective(line) {
+  if (typeof line !== 'string') return null
+
+  const match = line.match(INLINE_ACTION_PATTERN)
+  return match ? match[1] : null
 }
 
 function parseConditionKey(key) {

@@ -41,6 +41,7 @@ export const GUY_VISUAL_CONFIG = Object.freeze({
         happy: '/sprites/guy/face/happy.png',
         lookRight: '/sprites/guy/face/look_right.png',
         mad: '/sprites/guy/face/mad.png',
+        sing: '/sprites/guy/face/sing.png',
       }),
     }),
   ]),

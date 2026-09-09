@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 const PROMPT_DELAY_MS = 600
 
-export function DialogueBox({ text, onAdvance, isPersistent = false }) {
+export function DialogueBox({
+  text,
+  onAdvance,
+  autoAdvanceDelayMs = null,
+  isPersistent = false,
+}) {
   const [promptState, setPromptState] = useState({
     text,
     isVisible: false,
@@ -10,28 +15,35 @@ export function DialogueBox({ text, onAdvance, isPersistent = false }) {
   const buttonRef = useRef(null)
   const timeoutRef = useRef(null)
   const showPrompt =
-    !isPersistent && promptState.text === text && promptState.isVisible
+    !isPersistent &&
+    autoAdvanceDelayMs === null &&
+    promptState.text === text &&
+    promptState.isVisible
 
   useEffect(() => {
     if (isPersistent) return undefined
 
     timeoutRef.current = window.setTimeout(() => {
-      setPromptState({ text, isVisible: true })
+      if (autoAdvanceDelayMs === null) {
+        setPromptState({ text, isVisible: true })
+      } else {
+        onAdvance()
+      }
       timeoutRef.current = null
-    }, PROMPT_DELAY_MS)
+    }, autoAdvanceDelayMs ?? PROMPT_DELAY_MS)
 
     return () => {
       window.clearTimeout(timeoutRef.current)
       timeoutRef.current = null
     }
-  }, [isPersistent, text])
+  }, [autoAdvanceDelayMs, isPersistent, onAdvance, text])
 
   const handleClick = useCallback(() => {
     onAdvance()
   }, [onAdvance])
 
   useEffect(() => {
-    if (isPersistent) return undefined
+    if (isPersistent || autoAdvanceDelayMs !== null) return undefined
 
     function handleKeyDown(event) {
       if (
@@ -54,9 +66,9 @@ export function DialogueBox({ text, onAdvance, isPersistent = false }) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleClick, isPersistent])
+  }, [autoAdvanceDelayMs, handleClick, isPersistent])
 
-  if (isPersistent) {
+  if (isPersistent || autoAdvanceDelayMs !== null) {
     return (
       <div className="dialogue-box">
         <span>{text}</span>
