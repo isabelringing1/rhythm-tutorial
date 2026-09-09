@@ -223,6 +223,14 @@ button {
   justify-content: space-between;
 }
 
+.debug-menu-controls {
+  display: flex;
+  flex: 1;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .debug-menu form {
   display: flex;
   gap: 6px;
@@ -243,6 +251,39 @@ button {
   border: 1px solid black;
   font: inherit;
   cursor: pointer;
+}
+
+.microphone-debug {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding-left: 10px;
+  border-left: 1px solid black;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.microphone-level {
+  position: relative;
+  width: 12px;
+  height: 42px;
+  overflow: hidden;
+  background: #f4f4f4;
+  border: 1px solid black;
+}
+
+.microphone-level-fill {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  min-height: 1px;
+  background: #16833b;
+  transition: height 50ms linear;
+}
+
+.microphone-debug output {
+  display: block;
 }
 
 .rhythm-preview summary {

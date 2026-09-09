@@ -126,7 +126,7 @@ export async function createGameVisuals(
         duration,
       )
     }
-    if (feedback.rating !== 'perfect') {
+    if (!feedback.displayOnly && feedback.rating !== 'perfect') {
       characters
         .filter(({ slot }) => slot < PLAYER_SLOT)
         .forEach(({ visual }) => {

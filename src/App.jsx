@@ -104,11 +104,17 @@ function App() {
   const [playerDelay, setPlayerDelay] = useState(loadPlayerDelay)
   const [calibrationCount, setCalibrationCount] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
+  const [microphoneDebug, setMicrophoneDebug] = useState({
+    active: false,
+    pitch: null,
+    rms: 0,
+  })
   const calibrationPointsRef = useRef([])
   const attemptRef = useRef(null)
   const transitionRef = useRef(null)
   const gameStateRef = useRef(gameState)
   const instrumentEventHandlerRef = useRef(null)
+  const lastMicrophoneDebugUpdateRef = useRef(0)
   const activeTrackStepRef = useRef(null)
   const lastStartedAttemptRef = useRef(null)
   const nextAttemptStartRef = useRef(null)
@@ -153,6 +159,23 @@ function App() {
             instrumentId: instrument.id,
             noteIndex: null,
             rating: 'perfect',
+          },
+        })
+        return
+      }
+
+      if (
+        step.type === 'play' &&
+        gameState.mode === 'cpuTurn' &&
+        instrument.inputSource === 'microphone'
+      ) {
+        dispatch({
+          type: 'FEEDBACK',
+          feedback: {
+            displayOnly: true,
+            id: eventId,
+            inputEventType,
+            instrumentId: instrument.id,
           },
         })
         return
@@ -213,17 +236,43 @@ function App() {
         },
       })
     },
-    [audioEngine, gameState.stepIndex, isPaused, playerDelay],
+    [
+      audioEngine,
+      gameState.mode,
+      gameState.stepIndex,
+      isPaused,
+      playerDelay,
+    ],
   )
   instrumentEventHandlerRef.current = handleInstrumentEvent
+
+  const handleMicrophoneAnalysis = useCallback(({ active, pitch, rms }) => {
+    if (!active) {
+      lastMicrophoneDebugUpdateRef.current = 0
+      setMicrophoneDebug({ active: false, pitch: null, rms: 0 })
+      return
+    }
+
+    const now = performance.now()
+    if (now - lastMicrophoneDebugUpdateRef.current < 50) return
+    lastMicrophoneDebugUpdateRef.current = now
+    setMicrophoneDebug({ active, pitch, rms })
+  }, [])
 
   const startMicrophone = useCallback(
     (instrument) =>
       microphoneInput.start({
+        onAnalysis: handleMicrophoneAnalysis,
         options: instrument.microphone,
         onSound: ({ contextTime }) => {
           const mode = gameStateRef.current.mode
-          if (mode !== 'try' && mode !== 'playerTurn') return
+          if (
+            mode !== 'try' &&
+            mode !== 'cpuTurn' &&
+            mode !== 'playerTurn'
+          ) {
+            return
+          }
           instrumentEventHandlerRef.current?.(
             instrument,
             'press',
@@ -232,7 +281,7 @@ function App() {
           )
         },
       }),
-    [microphoneInput],
+    [handleMicrophoneAnalysis, microphoneInput],
   )
 
   useEffect(() => {
@@ -727,7 +776,10 @@ function App() {
     async function performAction() {
       try {
         if (activeDialogueAction === 'request_mic') {
-          await microphoneInput.start({ onSound: null })
+          await microphoneInput.start({
+            onAnalysis: handleMicrophoneAnalysis,
+            onSound: null,
+          })
         } else {
           throw new Error(`Unknown dialogue action "${activeDialogueAction}"`)
         }
@@ -751,7 +803,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [activeDialogueAction, microphoneInput])
+  }, [activeDialogueAction, handleMicrophoneAnalysis, microphoneInput])
 
   const previousStep = GAME_CONFIG.steps
     .slice(0, gameState.stepIndex)
@@ -863,6 +915,7 @@ function App() {
             )}
             <DebugMenu
               currentStep={gameState.stepIndex + 1}
+              microphone={microphoneDebug}
               onGoToStep={handleGoToStep}
               onSkip={handleSkipStep}
               totalSteps={GAME_CONFIG.steps.length}

@@ -2,12 +2,52 @@ import extractRms from 'meyda/dist/esm/extractors/rms.js'
 
 const FFT_SIZE = 512
 const NOISE_FLOOR_SMOOTHING = 0.05
+const MINIMUM_PITCH_HZ = 80
+const MAXIMUM_PITCH_HZ = 1_000
+const MINIMUM_PITCH_RMS = 0.01
+const MINIMUM_PITCH_CORRELATION = 0.7
+
+function detectPitch(samples, sampleRate, rms) {
+  if (rms < MINIMUM_PITCH_RMS) return null
+
+  const minimumLag = Math.floor(sampleRate / MAXIMUM_PITCH_HZ)
+  const maximumLag = Math.min(
+    Math.floor(sampleRate / MINIMUM_PITCH_HZ),
+    samples.length - 1,
+  )
+  let bestLag = 0
+  let bestCorrelation = MINIMUM_PITCH_CORRELATION
+
+  for (let lag = minimumLag; lag <= maximumLag; lag += 1) {
+    let correlation = 0
+    let firstEnergy = 0
+    let secondEnergy = 0
+
+    for (let index = 0; index < samples.length - lag; index += 1) {
+      const first = samples[index]
+      const second = samples[index + lag]
+      correlation += first * second
+      firstEnergy += first * first
+      secondEnergy += second * second
+    }
+
+    const normalizedCorrelation =
+      correlation / Math.sqrt(firstEnergy * secondEnergy)
+    if (normalizedCorrelation > bestCorrelation) {
+      bestCorrelation = normalizedCorrelation
+      bestLag = lag
+    }
+  }
+
+  return bestLag === 0 ? null : sampleRate / bestLag
+}
 
 export class MeydaMicrophoneInput {
   audioEngine
   analyser = null
   animationFrame = null
   input = null
+  onAnalysis = null
   onSound = null
   samples = null
   startPromise = null
@@ -18,7 +58,8 @@ export class MeydaMicrophoneInput {
     this.audioEngine = audioEngine
   }
 
-  start({ onSound, options = {} }) {
+  start({ onAnalysis = null, onSound, options = {} }) {
+    this.onAnalysis = onAnalysis
     this.onSound = onSound
     if (this.stream) return Promise.resolve()
     if (this.startPromise) return this.startPromise
@@ -84,10 +125,12 @@ export class MeydaMicrophoneInput {
     this.analyser = null
     this.samples = null
     this.stream = null
+    this.onAnalysis?.({ active: false, pitch: null, rms: 0 })
   }
 
   destroy() {
     this.stop()
+    this.onAnalysis = null
     this.onSound = null
   }
 
@@ -106,6 +149,11 @@ export class MeydaMicrophoneInput {
 
       this.analyser.getFloatTimeDomainData(this.samples)
       const rms = extractRms({ signal: this.samples })
+      this.onAnalysis?.({
+        active: true,
+        pitch: detectPitch(this.samples, context.sampleRate, rms),
+        rms,
+      })
       const threshold = Math.max(
         minimumRms,
         noiseFloor * noiseFloorMultiplier,
