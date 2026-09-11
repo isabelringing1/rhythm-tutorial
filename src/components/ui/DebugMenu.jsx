@@ -1,3 +1,25 @@
+const NOTE_NAMES = [
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
+]
+
+function getNoteName(frequency) {
+  const midiNote = Math.round(69 + 12 * Math.log2(frequency / 440))
+  const noteName = NOTE_NAMES[midiNote % NOTE_NAMES.length]
+  const octave = Math.floor(midiNote / NOTE_NAMES.length) - 1
+  return `${noteName}${octave}`
+}
+
 export function DebugMenu({
   currentStep,
   microphone,
@@ -13,7 +35,9 @@ export function DebugMenu({
 
   const levelPercent = Math.min(100, microphone.rms * 1_000)
   const pitchText =
-    microphone.pitch === null ? '—' : `${microphone.pitch.toFixed(0)} Hz`
+    microphone.pitch === null
+      ? '—'
+      : `${microphone.pitch.toFixed(0)} Hz (${getNoteName(microphone.pitch)})`
 
   return (
     <div className="debug-menu">

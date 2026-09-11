@@ -41,6 +41,8 @@ const FIRST_CPU_MEASURE = 1
 const PLAYER_MEASURE = 3
 const TURN_LEAD_IN = 0.35
 const STICKY_DIALOGUE_ADVANCE_DELAY_MS = 250
+const VOICE_SING_SMALL_MINIMUM_RMS = 1.00 //0.02
+const VOICE_SING_BIG_MINIMUM_RMS = 0.02 //0.06
 const gameFlowReducer = createGameFlowReducer(GAME_CONFIG)
 
 function getInstrumentSound(instrument, eventType) {
@@ -75,17 +77,61 @@ function getMicrophoneInstrument(step) {
   return null
 }
 
-function logOffBeatTiming(judgment) {
-  if (
-    judgment.rating === 'perfect' ||
-    !Number.isFinite(judgment.timingOffset)
-  ) {
+function describeInput(instrument, eventType) {
+  return `${instrument.id} ${eventType}`
+}
+
+function logInputJudgment(judgment, instrument, eventType) {
+  if (judgment.rating === 'perfect') return
+
+  const input = describeInput(instrument, eventType)
+  if (judgment.failureReason === 'noMatchingNote') {
+    console.log(`Input failed (${input}): no matching note remained`)
     return
   }
+  if (judgment.failureReason === 'wrongEventType') {
+    console.log(
+      `Input failed (${input}): expected ${judgment.expectedEventType}`,
+    )
+    return
+  }
+  if (!Number.isFinite(judgment.timingOffset)) return
+
   const direction = judgment.timingOffset < 0 ? 'early' : 'late'
-  console.log(
-    `${direction} by ${Math.abs(judgment.timingOffset * 1000).toFixed(1)}ms`,
-  )
+  const offset = Math.abs(judgment.timingOffset * 1000).toFixed(1)
+  const result =
+    judgment.rating === 'good'
+      ? 'good timing, but a perfect is required'
+      : 'outside the timing window'
+  console.log(`Input failed (${input}): ${offset}ms ${direction} — ${result}`)
+}
+
+function logMissedNotes(notes, noteIndexes) {
+  noteIndexes.forEach((noteIndex) => {
+    const note = notes[noteIndex]
+    const noteTime = typeof note === 'number' ? note : note.time
+    const instrumentId =
+      typeof note === 'number' ? 'note' : note.instrumentId
+    const eventType = typeof note === 'number' ? 'press' : note.eventType
+    console.log(
+      `Input failed (${instrumentId} ${eventType} at ${noteTime.toFixed(3)}s): no input before the timing window closed`,
+    )
+  })
+}
+
+function logAttemptFailure(result) {
+  if (result.isPerfect) return
+
+  const goodNotes = result.judgments.filter(
+    (judgment) => judgment === 'good',
+  ).length
+  const causes = []
+  if (result.missedNotes > 0) causes.push(`${result.missedNotes} missed note(s)`)
+  if (goodNotes > 0) {
+    causes.push(`${goodNotes} good-but-not-perfect note(s)`)
+  }
+  if (result.extraHits > 0) causes.push(`${result.extraHits} extra input(s)`)
+  console.log(`Play attempt failed: ${causes.join(', ')}`)
 }
 
 function loadPlayerDelay() {
@@ -108,6 +154,7 @@ function App() {
     active: false,
     pitch: null,
     rms: 0,
+    sounding: false,
   })
   const calibrationPointsRef = useRef([])
   const attemptRef = useRef(null)
@@ -154,6 +201,7 @@ function App() {
         dispatch({
           type: 'TRY_NOTE',
           feedback: {
+            displayOnly: true,
             id: eventId,
             inputEventType,
             instrumentId: instrument.id,
@@ -164,11 +212,40 @@ function App() {
         return
       }
 
+      const transition = transitionRef.current
+      const calibrationOffset =
+        step.timing.calibrationOffset -
+        playerDelay / 1000 -
+        instrument.inputDelay
+      const playbackTime =
+        contextTime === null
+          ? audioEngine.getPlaybackTime({
+              calibrationOffset,
+            })
+          : audioEngine.getPlaybackTimeAt(contextTime, {
+              calibrationOffset,
+            })
+      const isPlayerWindow =
+        transition !== null &&
+        playbackTime !== null &&
+        playbackTime >=
+          transition.playerStart - instrument.timing.goodWindow &&
+        playbackTime < transition.playerEnd
+
       if (
         step.type === 'play' &&
         gameState.mode === 'cpuTurn' &&
-        instrument.inputSource === 'microphone'
+        !isPlayerWindow
       ) {
+        console.log(
+          `Input failed (${describeInput(instrument, inputEventType)}): received during the CPU turn`,
+        )
+        if (attemptRef.current) {
+          attemptRef.current = {
+            ...attemptRef.current,
+            extraHits: attemptRef.current.extraHits + 1,
+          }
+        }
         dispatch({
           type: 'FEEDBACK',
           feedback: {
@@ -181,25 +258,10 @@ function App() {
         return
       }
 
-      const transition = transitionRef.current
-      const playbackTime =
-        contextTime === null
-          ? audioEngine.getPlaybackTime({
-              calibrationOffset:
-                step.timing.calibrationOffset - playerDelay / 1000,
-            })
-          : audioEngine.getPlaybackTimeAt(contextTime, {
-              calibrationOffset:
-                step.timing.calibrationOffset - playerDelay / 1000,
-            })
-      const isPlayerWindow =
-        transition !== null &&
-        playbackTime !== null &&
-        playbackTime >=
-          transition.playerStart - instrument.timing.goodWindow &&
-        playbackTime < transition.playerEnd
-
       if (!isPlayerWindow) {
+        console.log(
+          `Input failed (${describeInput(instrument, inputEventType)}): outside the player response window`,
+        )
         dispatch({
           type: 'FEEDBACK',
           feedback: {
@@ -224,7 +286,7 @@ function App() {
         inputEventType,
         instrument.id,
       )
-      logOffBeatTiming(result.judgment)
+      logInputJudgment(result.judgment, instrument, inputEventType)
       attemptRef.current = result.attempt
       dispatch({
         type: 'FEEDBACK',
@@ -246,18 +308,26 @@ function App() {
   )
   instrumentEventHandlerRef.current = handleInstrumentEvent
 
-  const handleMicrophoneAnalysis = useCallback(({ active, pitch, rms }) => {
-    if (!active) {
-      lastMicrophoneDebugUpdateRef.current = 0
-      setMicrophoneDebug({ active: false, pitch: null, rms: 0 })
-      return
-    }
+  const handleMicrophoneAnalysis = useCallback(
+    ({ active, pitch, rms, sounding }) => {
+      if (!active) {
+        lastMicrophoneDebugUpdateRef.current = 0
+        setMicrophoneDebug({
+          active: false,
+          pitch: null,
+          rms: 0,
+          sounding: false,
+        })
+        return
+      }
 
-    const now = performance.now()
-    if (now - lastMicrophoneDebugUpdateRef.current < 50) return
-    lastMicrophoneDebugUpdateRef.current = now
-    setMicrophoneDebug({ active, pitch, rms })
-  }, [])
+      const now = performance.now()
+      if (now - lastMicrophoneDebugUpdateRef.current < 50) return
+      lastMicrophoneDebugUpdateRef.current = now
+      setMicrophoneDebug({ active, pitch, rms, sounding })
+    },
+    [],
+  )
 
   const startMicrophone = useCallback(
     (instrument) =>
@@ -445,6 +515,10 @@ function App() {
             )
             attemptRef.current = expiration.attempt
             if (expiration.missedNoteIndexes.length > 0) {
+              logMissedNotes(
+                transition.notes,
+                expiration.missedNoteIndexes,
+              )
               dispatch({
                 type: 'FEEDBACK',
                 feedback: {
@@ -463,6 +537,10 @@ function App() {
             )
             attemptRef.current = finalExpiration.attempt
             if (finalExpiration.missedNoteIndexes.length > 0) {
+              logMissedNotes(
+                transition.notes,
+                finalExpiration.missedNoteIndexes,
+              )
               dispatch({
                 type: 'FEEDBACK',
                 feedback: {
@@ -472,6 +550,7 @@ function App() {
               })
             }
             const result = finishAttempt(attemptRef.current)
+            logAttemptFailure(result)
             nextAttemptStartRef.current = transition.playerEnd
             transitionRef.current = null
             dispatch({
@@ -745,6 +824,18 @@ function App() {
   }
 
   const activeStep = GAME_CONFIG.steps[gameState.stepIndex]
+  const isPlayerVoiceSounding =
+    microphoneDebug.active &&
+    microphoneDebug.sounding &&
+    getMicrophoneInstrument(activeStep)
+  const playerVoiceState =
+    isPlayerVoiceSounding &&
+    microphoneDebug.rms > VOICE_SING_BIG_MINIMUM_RMS
+      ? 'sing_big'
+      : isPlayerVoiceSounding &&
+          microphoneDebug.rms >= VOICE_SING_SMALL_MINIMUM_RMS
+        ? 'sing_small'
+        : null
   const activeDialogueAction =
     gameState.mode === 'dialogue'
       ? activeStep.lineActions?.[gameState.dialogueLine]
@@ -842,6 +933,7 @@ function App() {
         isCalibrating={calibrationStatus === 'calibrating'}
         isPlaying={isPlaying && !isPaused}
         performance={gameState.performance}
+        playerVoiceState={playerVoiceState}
         showCharacters={showCharacters}
         timing={timing}
       />

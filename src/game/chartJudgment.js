@@ -43,9 +43,17 @@ export function judgeChartTap(
     nearestError > goodWindow ||
     nearestEventType !== inputEventType
   ) {
+    const failureReason =
+      nearestIndex === -1
+        ? 'noMatchingNote'
+        : nearestEventType !== inputEventType
+          ? 'wrongEventType'
+          : 'outsideTimingWindow'
     return {
       attempt: { ...attempt, extraHits: attempt.extraHits + 1 },
       judgment: {
+        expectedEventType: nearestEventType,
+        failureReason,
         rating: 'miss',
         noteIndex: null,
         timingError: nearestError,

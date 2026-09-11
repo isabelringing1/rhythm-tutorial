@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@audio/pitch": "^2.0.4",
     "meyda": "5.6.3",
     "pixi.js": "^8.20.1",
     "react": "^19.2.8",

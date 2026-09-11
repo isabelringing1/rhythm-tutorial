@@ -64,6 +64,10 @@ export function createLayeredCharacter(config, textures, initialFlags = {}) {
   return {
     container,
 
+    getState(category) {
+      return stateMachine.getState(category)
+    },
+
     setState(category, state) {
       stateMachine.setState(category, state)
       syncStatefulLayers()

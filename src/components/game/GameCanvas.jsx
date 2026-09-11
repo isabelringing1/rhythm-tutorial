@@ -11,6 +11,7 @@ export function GameCanvas({
   isCalibrating,
   isPlaying,
   performance,
+  playerVoiceState,
   showCharacters,
   timing,
 }) {
@@ -22,6 +23,7 @@ export function GameCanvas({
   const isCalibratingRef = useRef(isCalibrating)
   const isPlayingRef = useRef(isPlaying)
   const performanceRef = useRef(performance)
+  const playerVoiceStateRef = useRef(playerVoiceState)
   const showCharactersRef = useRef(showCharacters)
   const timingRef = useRef(timing)
 
@@ -57,6 +59,7 @@ export function GameCanvas({
         getFlags: () => flagsRef.current,
           getIsPlaying: () => isPlayingRef.current,
           getPerformance: () => performanceRef.current,
+          getPlayerVoiceState: () => playerVoiceStateRef.current,
           getShowCharacters: () => showCharactersRef.current,
         })
       if (disposed) {
@@ -107,6 +110,11 @@ export function GameCanvas({
   useEffect(() => {
     performanceRef.current = performance
   }, [performance])
+
+  useEffect(() => {
+    playerVoiceStateRef.current = playerVoiceState
+    sceneRef.current?.game.setPlayerVoiceState(playerVoiceState)
+  }, [playerVoiceState])
 
   useEffect(() => {
     showCharactersRef.current = showCharacters

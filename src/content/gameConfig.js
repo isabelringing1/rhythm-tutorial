@@ -92,6 +92,7 @@ const rawGameConfig = {
       type: 'dialogue',
       lines: [
         'You\'re a natural.',
+        'Like the bell, you\'ll also play the pen as part of a group.',
         'Let\'s practice in line now.',
       ],
       lastLineStick: true,
@@ -114,8 +115,8 @@ const rawGameConfig = {
     {
       type: 'dialogue',
       lines: [
-        'Good.',
-        'But can you handle doing two things at once?',
+        'Good. Now let\'s shake things up a bit.',
+        'Can you handle playing both things at once?',
       ],
     },
     {
@@ -142,23 +143,23 @@ const rawGameConfig = {
       lines: [
         'Phew!',
         'It\'s a bit of a handful, isn\'t it?',
-        'Well, good news- this next instrument doesn\'t require any hands at all!',
-        'You\'ll need to use the microphone for this one. Please allow permissions!',
+        'Well, good news- this NEXT instrument doesn\'t require any hands at all!',
+        'You\'ll need to use the microphone for this one. (Make sure to allow permissions!)',
         '[{action}{request_mic}]',
-        'Try singing into the mic.'
+        'Okay, great. Now try singing into the mic.'
       ],
       lastLineStick: true,
     },
     {
       type: 'try',
       instrumentId: 'voice',
-      numNotes: 3,
+      numNotes: 50,
     },
     {
       type: 'dialogue',
       lines: [
-        'Lovely!',
-        'Sing along with the others now.'
+        'Lovely.',
+        'Okay, you know the drill. Sing along with the others.'
       ],
       lastLineStick: true,
     },
@@ -171,6 +172,36 @@ const rawGameConfig = {
         {
           instrumentId: 'voice',
           pattern: 'x... .... x... ....',
+        },
+      ],
+      backingTrack: '/audio/bottle.mp3',
+      requiredSuccesses: 3,
+      poseDuration: 0.12,
+    },
+    {
+      type: 'dialogue',
+      lines: [
+        'Lovely.',
+        'Now everything together!'
+      ],
+    },
+    {
+      type: 'play',
+      bpm: 125,
+      beatsPerBar: 4,
+      stepsPerBeat: 4,
+      patterns: [
+        {
+          instrumentId: 'bell',
+          pattern: '.... x.x. .... ....',
+        },
+        {
+          instrumentId: 'pen',
+          pattern: 'd... .... u... ....',
+        },
+        {
+          instrumentId: 'voice',
+          pattern: '.... .... .... x...',
         },
       ],
       backingTrack: '/audio/bottle.mp3',

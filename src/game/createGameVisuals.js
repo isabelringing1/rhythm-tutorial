@@ -11,6 +11,7 @@ const PLAYER_SLOT = 3
 const MAD_DURATION = 0.75
 const HAPPY_DURATION = 1
 const DEFAULT_TURN_END_ACTION_DURATION = 0.25
+const SINGING_FACE_STATES = new Set(['sing_big', 'sing_small'])
 const SMOOTH_TEXTURE_OPTIONS = {
   autoGenerateMipmaps: true,
   scaleMode: 'linear',
@@ -45,6 +46,7 @@ export async function createGameVisuals(
     getFlags,
     getIsPlaying,
     getPerformance,
+    getPlayerVoiceState,
     getShowCharacters,
   },
 ) {
@@ -101,6 +103,18 @@ export async function createGameVisuals(
     })
   }
 
+  function showCpuCharactersMad() {
+    characters
+      .filter(
+        ({ slot, visual }) =>
+          slot < PLAYER_SLOT &&
+          !SINGING_FACE_STATES.has(visual.getState('face')),
+      )
+      .forEach(({ visual }) => {
+        visual.playState('face', 'mad', MAD_DURATION)
+      })
+  }
+
   function showFeedback(feedback) {
     if (!feedback) return
     const performance = getPerformance()
@@ -108,7 +122,10 @@ export async function createGameVisuals(
       performance?.instruments
         .find((instrument) => instrument.id === feedback.instrumentId)
         ?.characterActions[feedback.inputEventType]
-    if (characterAction) {
+    if (
+      characterAction &&
+      !(feedback.instrumentId === 'voice' && getPlayerVoiceState())
+    ) {
       const playbackTime = audioEngine.getPlaybackTime()
       const isPlayerTurn =
         playbackTime !== null &&
@@ -126,12 +143,15 @@ export async function createGameVisuals(
         duration,
       )
     }
-    if (!feedback.displayOnly && feedback.rating !== 'perfect') {
-      characters
-        .filter(({ slot }) => slot < PLAYER_SLOT)
-        .forEach(({ visual }) => {
-          visual.playState('face', 'mad', MAD_DURATION)
-        })
+    if (feedback.displayOnly) {
+      if (feedback.noteIndex === undefined) {
+        showCpuCharactersMad()
+      }
+      return
+    }
+
+    if (feedback.rating !== 'perfect') {
+      showCpuCharactersMad()
     } else if (feedback.noteIndex === undefined) {
       characters.forEach(({ visual }) => {
         visual.playState('face', 'happy', HAPPY_DURATION)
@@ -159,6 +179,15 @@ export async function createGameVisuals(
 
   function setFlags(flags) {
     characters.forEach(({ visual }) => visual.setFlags(flags))
+  }
+
+  function setPlayerVoiceState(state) {
+    const playerVisual = charactersBySlot.get(PLAYER_SLOT).visual
+    if (state) {
+      playerVisual.setState('face', state)
+    } else {
+      playerVisual.resetState('face')
+    }
   }
 
   function update(ticker) {
@@ -209,6 +238,7 @@ export async function createGameVisuals(
   positionVisuals()
   showFeedback(getFeedback())
   showDialogueCharacterStates(getDialogueCharacterStates())
+  setPlayerVoiceState(getPlayerVoiceState())
   app.renderer.on('resize', positionVisuals)
   app.ticker.add(update)
 
@@ -216,6 +246,7 @@ export async function createGameVisuals(
     setFlags,
     showDialogueCharacterStates,
     showFeedback,
+    setPlayerVoiceState,
     destroy() {
       app.renderer.off('resize', positionVisuals)
       app.ticker.remove(update)

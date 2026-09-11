@@ -23,6 +23,14 @@ function compileTiming(instrument) {
   return Object.freeze({ ...timing })
 }
 
+function compileInputDelay(instrument) {
+  const inputDelay = instrument.inputDelay ?? 0
+  if (!Number.isFinite(inputDelay) || inputDelay < 0) {
+    throw new Error(`instrument "${instrument.id}" has an invalid inputDelay`)
+  }
+  return inputDelay
+}
+
 function compileCharacterActions(instrument) {
   const requiredEvents =
     instrument.inputMode === 'keyPress' ? ['press'] : ['down', 'up']
@@ -114,6 +122,7 @@ export function compileInstrumentConfig(instruments) {
       ...instrument,
       inputMode,
       inputSource,
+      inputDelay: compileInputDelay(instrument),
       timing: compileTiming(instrument),
       characterActions: compileCharacterActions({ ...instrument, inputMode }),
     })
@@ -167,6 +176,7 @@ export const INSTRUMENTS = compileInstrumentConfig([
     id: 'voice',
     inputSource: 'microphone',
     cpuSound: '/audio/sing.mp3',
+    inputDelay: 0.12,
     timing: {
       perfectWindow: 0.08,
       goodWindow: 0.16,
@@ -180,7 +190,7 @@ export const INSTRUMENTS = compileInstrumentConfig([
     characterActions: {
       press: {
         category: 'face',
-        state: 'sing',
+        state: 'sing_big',
         duration: 0.4,
       },
     },
