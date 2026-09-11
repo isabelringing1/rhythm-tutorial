@@ -1,7 +1,7 @@
 import { yin } from '@audio/pitch'
 import extractRms from 'meyda/dist/esm/extractors/rms.js'
 
-const FFT_SIZE = 4096
+const FFT_SIZE = 8192
 const NOISE_FLOOR_SMOOTHING = 0.05
 const MINIMUM_PITCH_HZ = 80
 const MAXIMUM_PITCH_HZ = 1_000
@@ -151,13 +151,12 @@ export class MeydaMicrophoneInput {
         context.currentTime - this.samples.length / context.sampleRate / 2
 
       if (isSounding) {
-        if (pitch === null || rms < threshold * releaseRatio) {
+        if (rms < threshold * releaseRatio) {
           isSounding = false
           pitch = null
         }
       } else if (
         rms >= threshold &&
-        pitch !== null &&
         contextTime - lastSoundTime >= minimumInterval
       ) {
         isSounding = true

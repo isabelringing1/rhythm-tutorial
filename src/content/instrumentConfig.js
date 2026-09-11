@@ -176,9 +176,9 @@ export const INSTRUMENTS = compileInstrumentConfig([
     id: 'voice',
     inputSource: 'microphone',
     cpuSound: '/audio/sing.mp3',
-    inputDelay: 0.12,
+    inputDelay: 0.0,
     timing: {
-      perfectWindow: 0.08,
+      perfectWindow: 0.1,
       goodWindow: 0.16,
     },
     microphone: {

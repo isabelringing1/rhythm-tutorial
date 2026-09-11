@@ -181,8 +181,8 @@ const rawGameConfig = {
     {
       type: 'dialogue',
       lines: [
-        'Lovely.',
-        'Now everything together!'
+        'Sounding good!',
+        'Okay, let\'s put everything together.'
       ],
     },
     {
